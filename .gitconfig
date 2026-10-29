@@ -1,0 +1,7 @@
+[user]
+	name = isucon-ip-172-31-13-138
+	email = isucon@ip-172-31-13-138
+[init]
+	defaultBranch = main
+[safe]
+	directory = /home/isucon

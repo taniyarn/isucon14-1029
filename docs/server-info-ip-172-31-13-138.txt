@@ -1,0 +1,545 @@
+
+## host
+hostname: ip-172-31-13-138  user: root  date: 2026-10-29T13:23:43+00:00
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+VERSION_ID="24.04"
+kernel: 6.17.0-1019-aws  arch: x86_64
+cpu: 2 cores  mem: 3792 MB  disk: 15G total, 6.0G free
+private ip(s): 172.31.13.138 
+
+## isucon home
+total 20616
+drwxr-xr-x 19 isucon isucon     4096 Oct 29 13:23 .
+drwxr-xr-x  4 root   root       4096 Aug 18 10:05 ..
+drwxrwxr-x  3 isucon isucon     4096 Aug 18 10:05 .ansible
+-rw-r--r--  1 isucon isucon      220 Mar 31  2024 .bash_logout
+-rw-r--r--  1 isucon isucon     3797 Aug 18 10:31 .bashrc
+drwxrwxr-x  3 isucon isucon     4096 Aug 18 10:36 .bundle
+drwxrwxr-x  6 isucon isucon     4096 Aug 18 10:36 .cache
+drwxrwxr-x  4 isucon isucon     4096 Aug 18 10:36 .cargo
+drwxrwxr-x  6 isucon isucon     4096 Aug 18 10:35 .config
+drwxrwxr-x  3 isucon isucon     4096 Aug 18 10:10 .cpanm
+drwxrwxr-x  7 isucon isucon     4096 Oct 29 13:23 .git
+-rw-rw-r--  1 isucon isucon      134 Oct 29 13:23 .gitconfig
+-rw-r--r--  1 isucon isucon     1216 Oct 29 13:23 .gitignore
+drwxrwxr-x  4 isucon isucon     4096 Aug 18 10:31 .local
+-rw-r--r--  1 isucon isucon      441 Aug 18 10:05 .local.env
+drwxrwxr-x  4 isucon isucon     4096 Aug 18 10:05 .npm
+drwxrwxr-x  5 isucon isucon     4096 Aug 18 10:33 .perl-cpm
+-rw-r--r--  1 isucon isucon      857 Aug 18 10:31 .profile
+drwxrwxr-x  6 isucon isucon     4096 Aug 18 10:05 .rustup
+drwx------  2 isucon isucon     4096 Oct 29 13:23 .ssh
+-rwxr-xr-x  1 isucon isucon       47 Aug 18 10:05 .x
+-rw-rw-r--  1 isucon isucon       26 Aug 18 10:31 .zshrc
+-rwxr-xr-x  1 root   root   20992162 Aug 18 10:42 bench
+drwxr-xr-x  2 root   root       4096 Oct 29 13:23 docs
+-rwxr-xr-x  1 isucon isucon      189 Aug 18 10:05 env.sh
+drwxr-xr-x  6 isucon isucon     4096 Oct 29 13:23 etc
+drwxrwxr-x  3 isucon isucon     4096 Aug 18 10:33 go
+drwxr-xr-x  7 isucon isucon     4096 Aug 18 10:18 local
+drwxrwxr-x 12 isucon isucon     4096 Aug 18 10:03 webapp
+--- env files
+[/home/isucon/env.sh]
+ISUCON_DB_HOST="127.0.0.1"
+ISUCON_DB_PORT="3306"
+ISUCON_DB_USER="isucon"
+ISUCON_DB_PASSWORD=***
+ISUCON_DB_NAME="isuride"
+
+# マッチング間隔（秒）
+ISUCON_MATCHING_INTERVAL=0.5
+--- webapp dirs
+go
+nodejs
+openapi.yaml
+payment_mock
+perl
+php
+public
+python
+ruby
+rust
+sql
+--- toolchains
+golang
+node
+perl
+php
+ruby
+rustup-init.sh
+go: /home/isucon/local/golang/bin/go go version go1.23.2 linux/amd64
+
+## services (systemd) — all running, system noise removed
+isuride-go.service: enabled / active
+isuride-matcher.service: enabled / active
+isuride-payment_mock.service: enabled / active
+mysql.service: enabled / active
+nginx.service: enabled / active
+snap.amazon-ssm-agent.amazon-ssm-agent.service: enabled / active
+--- disabled units that look app-related
+isuride-node.service isuride-perl.service isuride-php.service isuride-python.service isuride-ruby.service isuride-rust.service 
+
+## middleware detection (by process / port / config dir)
+nginx        running:yes   config: /etc/nginx/nginx.conf /etc/nginx/sites-enabled /etc/nginx/conf.d
+mysql        running:yes   config: /etc/mysql/mysql.conf.d /etc/mysql/my.cnf
+--- sqlite files (app data or middleware backends: ISUCON12-style tenant DBs, pdns gsqlite3, ...)
+     45056 /var/lib/fwupd/pending.db
+     32768 /var/lib/PackageKit/transactions.db
+   4009984 /var/lib/command-not-found/commands.db
+NOTE: SQLite database: /var/lib/fwupd/pending.db (45056 bytes)
+NOTE: SQLite database: /var/lib/PackageKit/transactions.db (32768 bytes)
+NOTE: SQLite database: /var/lib/command-not-found/commands.db (4009984 bytes)
+--- backend of each detected middleware (where does its data live?)
+--- processes with SQLite/DB files open right now (runtime truth, independent of configs)
+NOTE: fwupd (pid 3080) has open: /var/cache/fwupd/quirks.db
+NOTE: fwupd (pid 3080) has open: /var/lib/fwupd/pending.db
+--- packages that hint at storage / middleware
+libsqlite3-0:amd64 libsqlite3-dev:amd64 mysql-server mysql-server-8.0 mysql-server-core-8.0 
+--- env.sh keys (values hidden): DB / driver hints
+ISUCON_DB_HOST ISUCON_DB_PORT ISUCON_DB_USER ISUCON_DB_PASSWORD ISUCON_DB_NAME  ISUCON_MATCHING_INTERVAL 
+--- DB / cache connection hints in env
+ISUCON_DB_HOST="127.0.0.1"
+ISUCON_DB_NAME="isuride"
+ISUCON_DB_PASSWORD=***
+ISUCON_DB_PORT="3306"
+ISUCON_DB_USER="isucon"
+--- unit files
+[/etc/systemd/system/isuride-go.service]
+[Unit]
+Description=isuride-go
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/go
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/go/isuride
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-matcher.service]
+[Unit]
+Description=isuride-matcher
+After=isuride-go.service
+After=isuride-node.service
+After=isuride-perl.service
+After=isuride-php.service
+After=isuride-python.service
+After=isuride-ruby.service
+After=isuride-rust.service
+[Service]
+User=isucon
+Group=isucon
+EnvironmentFile=/home/isucon/env.sh
+ExecStart=/bin/sh -c "while true; do curl -s https://isuride.xiv.isucon.net/api/internal/matching; sleep $ISUCON_MATCHING_INTERVAL; done"
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-node.service]
+[Unit]
+Description=isuride-node
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/nodejs
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/.x npm run start
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-payment_mock.service]
+[Unit]
+Description=isuride-payment_mock
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/payment_mock
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/payment_mock/payment_mock
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-perl.service]
+[Unit]
+Description=isuride-perl
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/perl
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/.x ./local/bin/plackup -s Starlet -p 8080 -Ilib app.psgi
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-php.service]
+[Unit]
+Description=isuride-php
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/php
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/.x php-fpm --fpm-config /home/isucon/local/php/etc/isuride.php-fpm.conf
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-python.service]
+[Unit]
+Description=isuride-python
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/python
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/python/.venv/bin/gunicorn
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-ruby.service]
+[Unit]
+Description=isuride-ruby
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/ruby
+Environment=RUBY_YJIT_ENABLE=1
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/.x bundle exec puma --bind tcp://0.0.0.0:8080 --workers 8 --threads 0:8 --environment production
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-rust.service]
+[Unit]
+Description=isuride-rust
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/rust
+EnvironmentFile=/home/isucon/env.sh
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/rust/target/release/isuride
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=1
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-payment_mock.service]
+[Unit]
+Description=isuride-payment_mock
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/payment_mock
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/payment_mock/payment_mock
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+[/etc/systemd/system/isuride-payment_mock.service]
+[Unit]
+Description=isuride-payment_mock
+After=syslog.target
+After=mysql.service
+Requires=mysql.service
+[Service]
+WorkingDirectory=/home/isucon/webapp/payment_mock
+User=isucon
+Group=isucon
+ExecStart=/home/isucon/webapp/payment_mock/payment_mock
+ExecStop=/bin/kill -s QUIT $MAINPID
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+
+## listening ports
+State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess                                                                          
+LISTEN 0      511          0.0.0.0:80         0.0.0.0:*    "nginx",pid=11418,fd=5),("nginx",pid=11417,fd=5),("nginx",pid=628,fd=5
+LISTEN 0      4096         0.0.0.0:22         0.0.0.0:*    "sshd",pid=1439,fd=3),("systemd",pid=1,fd=98                          
+LISTEN 0      511          0.0.0.0:443        0.0.0.0:*    "nginx",pid=11418,fd=6),("nginx",pid=11417,fd=6),("nginx",pid=628,fd=6
+LISTEN 0      70         127.0.0.1:33060      0.0.0.0:*    "mysqld",pid=11481,fd=21                                              
+LISTEN 0      4096      127.0.0.54:53         0.0.0.0:*    "systemd-resolve",pid=450,fd=17                                       
+LISTEN 0      151        127.0.0.1:3306       0.0.0.0:*    "mysqld",pid=11481,fd=34                                              
+LISTEN 0      4096   127.0.0.53%lo:53         0.0.0.0:*    "systemd-resolve",pid=450,fd=15                                       
+LISTEN 0      4096            [::]:22            [::]:*    "sshd",pid=1439,fd=4),("systemd",pid=1,fd=99                          
+LISTEN 0      4096               *:12345            *:*    "payment_mock",pid=11535,fd=3                                         
+LISTEN 0      4096               *:8080             *:*    "isuride",pid=11534,fd=6                                              
+
+## nginx
+nginx version: nginx/1.24.0 (Ubuntu)
+--- conf layout
+84 . .. conf.d fastcgi.conf fastcgi_params koi-utf koi-win mime.types modules-available modules-enabled nginx.conf nginx.conf.orig proxy_params scgi_params sites-available sites-enabled snippets tls uwsgi_params win-utf 
+/etc/nginx/conf.d:
+
+/etc/nginx/sites-enabled:
+isuride.conf
+--- http block includes / log settings (nginx.conf)
+2:worker_processes auto;
+5:include /etc/nginx/modules-enabled/*.conf;
+8:	worker_connections 768;
+26:	include /etc/nginx/mime.types;
+40:	log_format ltsv "time:$time_local"
+60:	access_log /var/log/nginx/access.log ltsv;
+66:	gzip on;
+68:	# gzip_vary on;
+69:	# gzip_proxied any;
+70:	# gzip_comp_level 6;
+71:	# gzip_buffers 16 8k;
+72:	# gzip_http_version 1.1;
+73:	# gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+79:	include /etc/nginx/conf.d/*.conf;
+80:	include /etc/nginx/sites-enabled/*;
+--- site files (non-comment lines)
+[/etc/nginx/sites-enabled/isuride.conf]
+server {
+listen 80 default_server;
+server_name _;
+index index.html index.htm index.nginx-debian.html;
+root /var/www/html;
+location / {
+try_files $uri $uri/ =404;
+}
+}
+server {
+listen 443 ssl default_server;
+server_name _;
+index index.html index.htm index.nginx-debian.html;
+root /var/www/html;
+ssl_certificate     /etc/nginx/tls/dummy.crt;
+ssl_certificate_key /etc/nginx/tls/dummy.key;
+ssl_protocols TLSv1.3;
+ssl_prefer_server_ciphers off;
+location / {
+try_files $uri $uri/ =404;
+}
+}
+server {
+listen 443 ssl;
+server_name xiv.isucon.net;
+server_name *.xiv.isucon.net;
+ssl_certificate     /etc/nginx/tls/_.xiv.isucon.net.crt;
+ssl_certificate_key /etc/nginx/tls/_.xiv.isucon.net.key;
+ssl_protocols TLSv1.3;
+ssl_prefer_server_ciphers off;
+client_max_body_size 10m;
+root /home/isucon/webapp/public/;
+location / {
+try_files $uri /index.html;
+}
+location /api/ {
+proxy_set_header Host $host;
+proxy_pass http://localhost:8080;
+}
+location /api/internal/ {
+allow 127.0.0.1;
+deny all;
+proxy_set_header Host $host;
+proxy_pass http://localhost:8080;
+}
+}
+--- log files
+total 2148
+drwxr-xr-x  2 root     adm       4096 Aug 18 10:32 .
+drwxrwxr-x 13 root     syslog    4096 Oct 29 12:58 ..
+-rw-r-----  1 www-data adm    2181722 Oct 29 13:23 access.log
+-rw-r-----  1 www-data adm       1572 Oct 29 13:23 error.log
+
+## postgresql (if any)
+not installed
+
+## mysql / mariadb
+mysql  Ver 8.0.46-0ubuntu0.24.04.3 for Linux on x86_64 ((Ubuntu))
+--- conf layout
+/etc/mysql:
+conf.d
+debian-start
+debian.cnf
+my.cnf
+my.cnf.fallback
+mysql.cnf
+mysql.conf.d
+
+/etc/mysql/conf.d:
+mysql.cnf
+mysqldump.cnf
+
+/etc/mysql/mysql.conf.d:
+mysql.cnf
+mysqld.cnf
+zz-isucon.cnf
+--- effective settings (non-comment)
+[/etc/mysql/my.cnf]
+[/etc/mysql/mysql.conf.d/mysql.cnf]
+[mysql]
+[/etc/mysql/mysql.conf.d/mysqld.cnf]
+[mysqld]
+user		= mysql
+bind-address		= 127.0.0.1
+mysqlx-bind-address	= 127.0.0.1
+key_buffer_size		= 16M
+myisam-recover-options  = BACKUP
+log_error = /var/log/mysql/error.log
+max_binlog_size   = 100M
+[/etc/mysql/mysql.conf.d/zz-isucon.cnf]
+[mysqld]
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 0
+log_output = FILE
+[/etc/mysql/conf.d/mysql.cnf]
+[mysql]
+[/etc/mysql/conf.d/mysqldump.cnf]
+[mysqldump]
+quick
+quote-names
+max_allowed_packet	= 16M
+--- can we query as root via socket?
+Variable_name	Value
+bind_address	127.0.0.1
+datadir	/var/lib/mysql/
+innodb_buffer_pool_size	134217728
+log_output	FILE
+long_query_time	0.000000
+max_connections	151
+port	3306
+slow_query_log	ON
+slow_query_log_file	/var/log/mysql/slow.log
+socket	/var/run/mysqld/mysqld.sock
+--- databases / table sizes
+TABLE_SCHEMA	TABLE_NAME	TABLE_ROWS	mb
+isuride	chair_locations	23598	2.5
+isuride	ride_statuses	4474	0.5
+isuride	users	571	0.3
+isuride	chairs	500	0.1
+isuride	coupons	518	0.1
+isuride	owners	10	0.1
+isuride	payment_tokens	559	0.1
+isuride	rides	760	0.1
+isuride	chair_models	55	0.0
+isuride	settings	0	0.0
+--- users
+user	host
+isucon	%
+debian-sys-maint	localhost
+mysql.infoschema	localhost
+mysql.session	localhost
+mysql.sys	localhost
+root	localhost
+--- log files
+total 24
+drwxr-x---  2 mysql adm    4096 Oct 29 13:23 .
+drwxrwxr-x 13 root  syslog 4096 Oct 29 12:58 ..
+-rw-r-----  1 mysql adm    6806 Oct 29 13:23 error.log
+-rw-r-----  1 mysql adm    5788 Oct 29 13:23 slow.log
+
+## app
+--- processes
+    970 isucon         25:42  1920 /bin/sh -c while true; do curl -s https://isuride.xiv.isucon.net/api/internal/matching; sleep $ISUCON_MAT
+  10938 root           00:09  7100 sudo env ROLE=init PHASE=all LANGS=go GIT_REMOTE=git@github.com:taniyarn/isucon14-1029.git DEPLOY_KEY=/tm
+  11534 isucon         00:03  8984 /home/isucon/webapp/go/isuride
+  11535 isucon         00:03  6032 /home/isucon/webapp/payment_mock/payment_mock
+  12341 isucon         00:00  2032 sleep 0.5
+--- app log (journal, last 5 lines of each isu* unit)
+[isuride-go.service]
+Oct 29 13:23:43 ip-172-31-13-138 isuride[11534]: 2026/10/29 13:23:43 "GET http://isuride.xiv.isucon.net/api/internal/matching HTTP/1.0" from 127.0.0.1:53060 - 2
+Oct 29 13:23:44 ip-172-31-13-138 isuride[11534]: 2026/10/29 13:23:44 "GET http://isuride.xiv.isucon.net/api/internal/matching HTTP/1.0" from 127.0.0.1:53072 - 2
+Oct 29 13:23:44 ip-172-31-13-138 isuride[11534]: 2026/10/29 13:23:44 "GET http://isuride.xiv.isucon.net/api/internal/matching HTTP/1.0" from 127.0.0.1:53084 - 2
+Oct 29 13:23:45 ip-172-31-13-138 isuride[11534]: 2026/10/29 13:23:45 "GET http://isuride.xiv.isucon.net/api/internal/matching HTTP/1.0" from 127.0.0.1:53098 - 2
+Oct 29 13:23:45 ip-172-31-13-138 isuride[11534]: 2026/10/29 13:23:45 "GET http://isuride.xiv.isucon.net/api/internal/matching HTTP/1.0" from 127.0.0.1:53102 - 2
+[isuride-matcher.service]
+Oct 29 13:23:42 ip-172-31-13-138 sh[11525]: <body>
+Oct 29 13:23:42 ip-172-31-13-138 sh[11525]: <center><h1>502 Bad Gateway</h1></center>
+Oct 29 13:23:42 ip-172-31-13-138 sh[11525]: <hr><center>nginx/1.24.0 (Ubuntu)</center>
+Oct 29 13:23:42 ip-172-31-13-138 sh[11525]: </body>
+Oct 29 13:23:42 ip-172-31-13-138 sh[11525]: </html>
+[isuride-payment_mock.service]
+Oct 29 12:58:03 ip-172-31-13-138 systemd[1]: Started isuride-payment_mock.service - isuride-payment_mock.
+Oct 29 13:23:40 ip-172-31-13-138 systemd[1]: Stopping isuride-payment_mock.service - isuride-payment_mock...
+Oct 29 13:23:40 ip-172-31-13-138 systemd[1]: isuride-payment_mock.service: Deactivated successfully.
+Oct 29 13:23:40 ip-172-31-13-138 systemd[1]: Stopped isuride-payment_mock.service - isuride-payment_mock.
+Oct 29 13:23:42 ip-172-31-13-138 systemd[1]: Started isuride-payment_mock.service - isuride-payment_mock.
+
+## measurement tools present?
+alp              /usr/local/bin/alp
+slp              /usr/local/bin/slp
+pt-query-digest  -
+sar              /usr/bin/sar
+sadf             /usr/bin/sadf
+dstat            -
+duckdb           -
+netdata          -
+perf             /usr/bin/perf
+sysstat: 12.6.1-2
+
+## kernel / limits
+net.core.somaxconn = 4096
+net.ipv4.ip_local_port_range = 10000	65535
+net.ipv4.tcp_tw_reuse = 2
+fs.file-max = 9223372036854775807
+nofile (isucon): 655360
+
+## git state of /home/isucon
+fatal: your current branch 'main' does not have any commits yet
+--- large files (>1MB) under /home/isucon (top 20)
+ 154144800 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/lib/libLLVM.so.19.1-rust-1.83.0-stable
+ 136610320 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/lib/librustc_driver-a1396821e0813435.so
+  53797646 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-959d3389fa3da8a5.rlib
+  35182272 /home/isucon/.local/bin/uv
+  34775408 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/bin/cargo
+  28738376 /home/isucon/webapp/nodejs/node_modules/@biomejs/cli-linux-x64/biome
+  28270688 /home/isucon/webapp/nodejs/node_modules/@biomejs/cli-linux-x64-musl/biome
+  26883720 /home/isucon/.local/share/uv/python/cpython-3.13.1-linux-x86_64-gnu/lib/libpython3.13.so.1.0
+  23649745 /home/isucon/webapp/php/vendor/phpstan/phpstan/phpstan.phar
+  23572815 /home/isucon/.bundle/cache/compact_index/rubygems.org.443.29b0360b937aa4d161703e6160654e47/versions
+  20992162 /home/isucon/bench
+  20838840 /home/isucon/.cargo/bin/rustup
+  18429288 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-ca74a2d9c5166d9f.rlib
+  16229144 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/bin/rustdoc
+  13344880 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-ca74a2d9c5166d9f.so
+  13094896 /home/isucon/webapp/rust/target/release/isuride
+  13094896 /home/isucon/webapp/rust/target/release/deps/isuride-03e568dcf8ce9230
+  12751000 /home/isucon/webapp/rust/target/release/deps/libsqlx_macros-9faa3bc9fe30d7ba.so
+  12709664 /home/isucon/.rustup/toolchains/1.83.0-x86_64-unknown-linux-gnu/bin/clippy-driver
+  12256786 /home/isucon/webapp/rust/target/release/deps/libsyn-67391e00b515bd0a.rlib
+
+## done

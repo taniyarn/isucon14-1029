@@ -15,14 +15,15 @@ INSERT INTO chair_distances (chair_id, total_distance, total_distance_updated_at
 SELECT chair_id,
        SUM(IFNULL(distance, 0)),
        MAX(created_at),
-       SUBSTRING_INDEX(GROUP_CONCAT(latitude ORDER BY created_at DESC, id DESC), ',', 1),
-       SUBSTRING_INDEX(GROUP_CONCAT(longitude ORDER BY created_at DESC, id DESC), ',', 1)
-FROM (SELECT id,
-             chair_id,
+       -- latest position = row number 1 (no GROUP_CONCAT: its 1024-byte cut is error 1260 in strict mode)
+       MAX(CASE WHEN rn = 1 THEN latitude END),
+       MAX(CASE WHEN rn = 1 THEN longitude END)
+FROM (SELECT chair_id,
              created_at,
              latitude,
              longitude,
              ABS(latitude - LAG(latitude) OVER (PARTITION BY chair_id ORDER BY created_at)) +
-             ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance
+             ABS(longitude - LAG(longitude) OVER (PARTITION BY chair_id ORDER BY created_at)) AS distance,
+             ROW_NUMBER() OVER (PARTITION BY chair_id ORDER BY created_at DESC, id DESC) AS rn
       FROM chair_locations) tmp
 GROUP BY chair_id;

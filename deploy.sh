@@ -66,6 +66,9 @@ etc_install etc/nginx/nginx.conf && etc_install etc/nginx/sites-available/isurid
 
 # ---- 2a. reboot safety: keep restarting the app until the DB (possibly on another host) is up ----
 # systemd's default start limit (5 starts / 10 s) turns "DB not ready yet" into a permanently failed unit after a reboot.
+# The unit itself: Wants= (not Requires=) mysql — with the DB on svc3, a stopped / failed local mysql must not stop the app
+# or fail its start at boot (a dependency failure is not retried by Restart=always). A drop-in cannot reset Requires=.
+etc_install etc/systemd/system/isuride-go.service
 if [ -f etc/systemd/system/isuride-go.service.d/restart.conf ]; then
   etc_install etc/systemd/system/isuride-go.service.d/restart.conf && sudo systemctl daemon-reload
 fi

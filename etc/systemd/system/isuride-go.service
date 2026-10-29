@@ -2,7 +2,7 @@
 Description=isuride-go
 After=syslog.target
 After=mysql.service
-Requires=mysql.service
+Wants=mysql.service
 
 [Service]
 WorkingDirectory=/home/isucon/webapp/go

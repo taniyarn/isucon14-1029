@@ -30,3 +30,4 @@ layer: `SQL only`（クエリと index だけ。ハンドラの流れは変え�
 | branch | files / functions | layer | owner (session) | status | updated |
 |---|---|---|---|---|---|
 | fix/example/ride-cache（例。消してよい） | `webapp/go/app_handlers.go`: `appGetNotification`, `getLatestRideStatus` | logic | lane2 / subagent ridecache | abandoned | 10:00 |
+| setup/free-wins | `webapp/go/main.go`: `setup` (DSN / pool / Open+ping retry, Logger middleware line) (same file as setup/measure-patch); `etc/nginx/nginx.conf`, `etc/nginx/sites-available/isuride.conf`; `etc/systemd/system/isuride-go.service.d/` | config | lane2 / subagent D | open | 22:25 |

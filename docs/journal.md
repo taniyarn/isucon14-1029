@@ -28,3 +28,4 @@
 22:56 | impl/chair-distance #? / #19 | owner/chairs の総距離を要約テーブル chair_distances に（coordinate で加算、init.sh で作り直し） | report 20261029-134509 owner/chairs SQL 54%（#11 後 avg 281ms） | merge 06481fe、OK: 盤 22:55
 22:58 | revert-19 / #21 | [fast] revert #19 (smoke: /api/initialize 500) | — | merge 44ee5fb、OK: fast（事後レビュー）
 23:18 | 人の判断 | t31 特別賞はベンチ 5 の後に計測 OFF（#2 → 1 ベンチ → #3）（盤）/ #19 は smoke で initialize 500 → #21 で revert（ec64bd8）
+23:00 | docs-ride-status / #23 | [fast] docs: design ride status column | — | merge bd8fc56、OK: fast（事後レビュー）

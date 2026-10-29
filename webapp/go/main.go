@@ -61,9 +61,20 @@ func setup() http.Handler {
 	dbConfig.ParseTime = true
 	dbConfig.InterpolateParams = true
 
-	_db, err := sqlx.Connect("mysql", dbConfig.FormatDSN())
+	_db, err := sqlx.Open("mysql", dbConfig.FormatDSN())
 	if err != nil {
 		panic(err)
+	}
+	// The DB may come up after the app (separate host / crash recovery): retry for up to 60 s.
+	for i := 0; ; i++ {
+		if err = _db.Ping(); err == nil {
+			break
+		}
+		if i >= 60 {
+			panic(err)
+		}
+		slog.Info("waiting for DB", "err", err)
+		time.Sleep(time.Second)
 	}
 	_db.SetMaxOpenConns(64)
 	_db.SetMaxIdleConns(64)

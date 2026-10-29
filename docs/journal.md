@@ -13,3 +13,4 @@
 22:43 | docs-app-next / #12 | [fast] docs: app-next | — | merge f2730c3、OK: fast（事後レビュー）
 22:45 | docs/infra-tuning / #13 | [fast] docs: etc/ だけで済むチューニング候補（infra-tuning.md） | — | merge a49251b、OK: fast（事後レビュー）
 22:45 | scan/133401 / #14 | [fast] docs: technique-scan 20261029-133401 (early-scan included) | — | merge adb083c、OK: fast（事後レビュー）
+22:52 | bench 2 20261029-134509 | main f2a76bc（#1 #4 #6 #9 #10） | score 8071（761 → 10.6 倍） | CPU is not the limit (idle 52%)

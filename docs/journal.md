@@ -19,3 +19,4 @@
 22:55 | effect 20261029-134509 | #4 db-split 効いた（svc1 mysqld 168%→1%、svc3 192%）/ #1 free wins 効いた / #9 thread_cache 効いた / #6 index・N+1 効いた（nearby 3947→112ms）
 22:50 | docs-chair-distance / #18 | [fast] docs: design chair-distance (T7) | — | merge 31406cb、OK: fast（事後レビュー）
 23:01 | 人の判断 | t25 T7 chair_distances の設計（#18）OK（盤）/ t24 #16 #15 #17 OK（盤）
+23:02 | bench 3 20261029-134923 | main 2c9736a（#8 #11） | score 9225（8071 → +14%） | CPU is not the limit (idle 63%)

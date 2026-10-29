@@ -24,3 +24,4 @@
 22:52 | early/matching / PR #? / #15 | matching を待ち全件×空き椅子の到着順に + matcher 100 ms・app 直叩き | bench.log 不満100%がマッチ待ち、matcher 実測 1,182 ms（summary 133401） | merge 2ba6f9c、OK: 盤 22:51
 22:52 | early/payment-idem / PR #? / #17 | 決済に Idempotency-Key（ride id）+ WithoutCancel、失敗時は再送 | 守り: 切断で決済済み+ロールバック → 次回の二重請求（クリティカル）の芽 | merge 5cef54c、OK: 盤 22:51
 23:04 | effect 20261029-134923 | #11 owner 窓の絞り込み 効いた（owner/chairs 3767→281ms）/ retry_after 効いた（notification -36%）/ ただし pass=false（マッチング遅れ ×2）
+23:12 | bench 4 20261029-135253 | main fe8a21d（#16 #15 #17） | score 28768 pass=true（9225 FAIL → 3.1 倍） | 特別賞の 88%、CPU is not the limit (idle 53%)

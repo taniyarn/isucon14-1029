@@ -23,7 +23,8 @@ var db *sqlx.DB
 func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")
-	http.ListenAndServe(":8080", mux)
+	go startMeasure()                                 // measurement:
+	http.ListenAndServe(":8080", measureHandler(mux)) // measurement: sqltag request tags
 }
 
 func setup() http.Handler {
@@ -61,7 +62,7 @@ func setup() http.Handler {
 	dbConfig.ParseTime = true
 	dbConfig.InterpolateParams = true
 
-	_db, err := sqlx.Open("mysql", dbConfig.FormatDSN())
+	_db, err := sqlx.Open(dbDriverName, dbConfig.FormatDSN()) // measurement: driver name
 	if err != nil {
 		panic(err)
 	}

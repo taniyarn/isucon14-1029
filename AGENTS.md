@@ -16,9 +16,12 @@ This repo is `/home/isucon` of the contest servers (app under `webapp/`, OS conf
 
 ## Fill in on contest day (5 min)
 
-- App name / language dir: `webapp/go`  ·  app unit: `isuride-go.service`  ·  build: see `deploy.sh`
-- Servers: svc1 = ______ (role), svc2 = ______, svc3 = ______
+- App name / language dir: ISURIDE, `webapp/go`  ·  app unit: `isuride-go.service`  ·  build: see `deploy.sh`  ·  side units: `isuride-matcher.service` (curls `GET /api/internal/matching` on its own host every `ISUCON_MATCHING_INTERVAL`=0.5 s from `env.sh`; free to change), `isuride-payment_mock.service` (:12345, dev only; the bench brings its own payment server). DB: MySQL `isuride`. Details: `docs/kickoff.md`
+- Servers (public / private): svc1 = 13.231.171.206 / 172.31.13.138 (bench target, `--addr`), svc2 = 176.32.88.158 / 172.31.6.124, svc3 = 13.158.31.40 / 172.31.6.139. Right now all three run app + MySQL + nginx + matcher (each its own DB); only svc1 gets traffic
 - Score formula / fail conditions (from the manual, 3 lines):
+  - score = sum(match→pickup distance) × 0.1 + sum(pickup→destination distance) + completed rides × 5 (a ride completes at `POST /api/app/rides/:ride_id/evaluation`)
+  - FAIL: initialize / consistency-check error, any critical error (unexpected notification or state transition, ride unmatched too long, evaluation timeout, unpaid or wrong payment), ≥ 200 warnings; special prize at 32,767
+  - windows: nearby-chairs coordinates / owner distance 3 s, notification 3 s after the state change; everything else immediate. initialize 30 s, notification 60 s, other requests 10 s
 
 ## Reply language
 

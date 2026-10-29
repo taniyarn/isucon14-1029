@@ -39,3 +39,4 @@ layer: `SQL only`（クエリと index だけ。ハンドラの流れは変え�
 | setup/app-map | `docs/app-map.md`, `docs/app-annotations.json`, `docs/plans/app-early.md` (new) | docs | lane3 | merged | 22:34 |
 | infra/unit-wants | `etc/systemd/system/isuride-go.service` (Requires=mysql -> Wants=mysql); `deploy.sh`: section 2a only (etc_install of the unit) (same file as setup/db-split, infra/measure-off) | config | lane2 | open | 22:34 |
 | integ/20261029-133401 | `webapp/sql/indexes/20261029-133401-indexes.sql` (new); `webapp/go/app_handlers.go`: `appGetNotification` (retry_after_ms), `appGetNearbyChairs` (stacked on integ/early); `webapp/go/chair_handlers.go`: `chairGetNotification` (retry_after_ms); `webapp/go/owner_handlers.go`: `ownerGetChairs` | SQL only + logic (rides / ride_statuses / chair_locations) | lane3 | open | 22:45 |
+| fix/20261029-133401/ops | `etc/mysql/mysql.conf.d/zz-perf.cnf` (thread_cache_size) | config | lane2 | open | 22:38 |

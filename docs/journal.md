@@ -17,3 +17,4 @@
 22:47 | infra/unit-wants / #8 | [fast] systemd: isuride-go を Requires=mysql → Wants=mysql（DB→svc3 後の再起動対策） | — | merge cc5ffdf、OK: 盤 22:46
 22:47 | integ/20261029-133401 #? / #11 | index 3本 + nearby位置をJOIN + retry_after_ms app 200 / chair 100 + ownerGetChairsの窓を絞る | report 20261029-133401 P1 ride_statuses 24%+12%+8%、owner/chairs 30%、通知ポーリング | merge 3d82a87、OK: 盤 22:46
 22:55 | effect 20261029-134509 | #4 db-split 効いた（svc1 mysqld 168%→1%、svc3 192%）/ #1 free wins 効いた / #9 thread_cache 効いた / #6 index・N+1 効いた（nearby 3947→112ms）
+22:50 | docs-chair-distance / #18 | [fast] docs: design chair-distance (T7) | — | merge 31406cb、OK: fast（事後レビュー）

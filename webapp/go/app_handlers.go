@@ -71,27 +71,28 @@ func appPostUsers(w http.ResponseWriter, r *http.Request) {
 
 	// 招待コードを使った登録
 	if req.InvitationCode != nil && *req.InvitationCode != "" {
-		// 招待する側の招待数をチェック
-		var coupons []Coupon
-		err = tx.SelectContext(ctx, &coupons, "SELECT * FROM coupons WHERE code = ? FOR UPDATE", "INV_"+*req.InvitationCode)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		if len(coupons) >= 3 {
-			writeError(w, http.StatusBadRequest, errors.New("この招待コードは使用できません。"))
-			return
-		}
-
-		// ユーザーチェック
+		// ユーザーチェック。招待する側の行（invitation_code は UNIQUE）をロックして同じ招待コードの登録を直列にする
+		// （coupons WHERE code = ? FOR UPDATE は code に index が無く全行と gap をロックし、INSERT どうしで deadlock した）
 		var inviter User
-		err = tx.GetContext(ctx, &inviter, "SELECT * FROM users WHERE invitation_code = ?", *req.InvitationCode)
+		err = tx.GetContext(ctx, &inviter, "SELECT * FROM users WHERE invitation_code = ? FOR UPDATE", *req.InvitationCode)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				writeError(w, http.StatusBadRequest, errors.New("この招待コードは使用できません。"))
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		// 招待する側の招待数をチェック（ロックの後の最初の一貫読みなので、先に commit した登録も数える）
+		var invitedCount int
+		err = tx.GetContext(ctx, &invitedCount, "SELECT COUNT(*) FROM coupons WHERE code = ?", "INV_"+*req.InvitationCode)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if invitedCount >= 3 {
+			writeError(w, http.StatusBadRequest, errors.New("この招待コードは使用できません。"))
 			return
 		}
 

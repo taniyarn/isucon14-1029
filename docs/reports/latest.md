@@ -8,27 +8,28 @@
 > The benchmarker calls the API directly. Request counts here reflect the browser UI; use the access log for bench behaviour.
 
 
+
 <!-- bench:start -->
-## Now — what to solve next (bench run 20261029-134509, vs 20261029-133401; refreshed 2026-10-29T13:47:23.878Z)
+## Now — what to solve next (bench run 20261029-134923, vs 20261029-134509; refreshed 2026-10-29T13:51:58.835Z)
 
 Next step (report rules):
-1. deep-dive — `task deepdive TS=20261029-134509 → deep-dive skill`
-2. 構成変更: 空いている host に処理を移す — `TECHNIQUES T26（app 2 台 + host 固定の endpoint は nginx で寄せる）/ T27（付随サービス）`
-3. parallel-fix を続ける — `task actions:plan TS=20261029-134509 → parallel-fix skill`
+1. deep-dive — `task deepdive TS=20261029-134923 → deep-dive skill`
+2. parallel-fix を続ける — `task actions:plan TS=20261029-134923 → parallel-fix skill`
+3. technique-scan — `technique-scan skill で。対象 run は 20261029-134923`
 
 | # | what | pts | share | p99 ms | score | fix | to do | rules |
 |---|---|---|---|---|---|---|---|---|
-| 1 | `GET /api/app/notification` | 111 | 40% | 110 | loop | parallel-fix file:app_handlers.go, indexes | この endpoint の処理を軽くする（app_handlers.go）; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/app/notification; index を追加: coupons(used_by); 重い集計 SQL を減らす（1 回にまとめる / 結果をキャッシュ / 集計列）: SELECT r.id AS ride_id, r.evaluation, rs.status FROM rides r JOIN rid…; index を追加: ride_statuses(ride_id, app_sent_at, created_at) | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
-| 2 | `POST /api/initialize` | 50 | 0% | 2699 |  | investigate (deep-dive) | regression 1817→2699 ms; 悪化の原因を探す（前の run との差分 / deep-dive） | /api/initializeは30秒以内、language=goを返し、payment_serverを保存。データ構造を変えたらinitializeも追従 |
-| 3 | `GET /api/chair/notification` | 48 | 28% | 84 |  | parallel-fix file:chair_handlers.go, indexes | ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/chair/notification; この endpoint の処理を軽くする（chair_handlers.go）; index を追加: ride_statuses(ride_id, chair_sent_at, created_at) | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
-| 4 | `GET /api/owner/chairs` | 31 | 11% | 6741 |  | parallel-fix file:owner_handlers.go | この endpoint の処理を軽くする（owner_handlers.go）; 重い集計 SQL を減らす（1 回にまとめる / 結果をキャッシュ / 集計列）: SELECT id, owner_id, name, access_token, model, is_active, created_at… | owner/chairsの総走行距離はcoordinateから3秒以内に反映 |
-| 5 | `POST /api/chair/coordinate` | 29 | 19% | 95 |  | design (assign an owner) | ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: POST /api/chair/coordinate | nearby-chairsの座標は過去3秒以内にcoordinateで送られた座標と一致; owner/chairsの総走行距離はcoordinateから3秒以内に反映; スコア = マッチ位置→乗車位置の距離×0.1 + 乗車位置→目的地の距離 + 完了ライド数×5 |
-| 6 | `P2` | 12 |  |  |  | parallel-fix file:app_handlers.go | CPU hot spot: main.appGetNotification (21% of the app's CPU) |  |
-| 7 | `P2` | 12 |  |  |  | parallel-fix file:chair_handlers.go | CPU hot spot: main.chairGetNotification (15% of the app's CPU) |  |
+| 1 | `GET /api/app/notification` | 99 | 35% | 56 | loop | parallel-fix file:app_handlers.go, indexes | この endpoint の処理を軽くする（app_handlers.go）; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/app/notification; index を追加: coupons(used_by); Query on ride_statuses is still slow with its index (4% of SQL time) | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
+| 2 | `POST /api/chair/coordinate` | 48 | 28% | 41 |  | parallel-fix file:chair_handlers.go | この endpoint の処理を軽くする（chair_handlers.go）; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: POST /api/chair/coordinate | nearby-chairsの座標は過去3秒以内にcoordinateで送られた座標と一致; owner/chairsの総走行距離はcoordinateから3秒以内に反映; スコア = マッチ位置→乗車位置の距離×0.1 + 乗車位置→目的地の距離 + 完了ライド数×5 |
+| 3 | `GET /api/chair/notification` | 34 | 24% | 44 |  | design (assign an owner) | ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/chair/notification | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
+| 4 | `GET /` | 30 | 0% | 0 |  | parallel-fix file:app_handlers.go, file:internal_handlers.go | この endpoint の処理を軽くする（app_handlers.go）; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/app/notification; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/chair/notification; Periodic job GET /api/internal/matching: every 558 ms, ≈ 1.0 writes per call |  |
+| 5 | `GET /api/owner/chairs` | 16 | 6% | 901 |  | parallel-fix file:owner_handlers.go | 重い集計 SQL を減らす（1 回にまとめる / 結果をキャッシュ / 集計列）: SELECT id, owner_id, name, access_token, model, is_active, created_at… | owner/chairsの総走行距離はcoordinateから3秒以内に反映 |
+| 6 | `GET /api/app/nearby-chairs` | 16 | 3% | 576 | loop | parallel-fix file:app_handlers.go | 重い集計 SQL を減らす（1 回にまとめる / 結果をキャッシュ / 集計列）: SELECT c.id, c.name, c.model, cl.latitude, cl.longitude FROM chairs c… | nearby-chairsの座標は過去3秒以内にcoordinateで送られた座標と一致 |
+| 7 | `P2` | 12 |  |  |  | parallel-fix file:app_handlers.go | CPU hot spot: main.appGetNotification (18% of the app's CPU) |  |
 
-(+1 more open items)
+(+3 more open items)
 
-Resolved: Add an index on ride_statuses(ride_id, created_at), Add an index on chair_locations(chair_id, created_at), Speed up GET /api/app/nearby-chairs (avg 3947ms, 4% of request time), Periodic job GET /api/internal/matching: every 1182 ms, work unknown per call, Add an index on rides(chair_id, updated_at), Add an index on rides(chair_id, created_at), Periodic job GET /api/internal/matching: every 535 ms, work unknown per call, Periodic job GET /api/internal/matching: every 537 ms, work unknown per call
+Resolved: Polling: GET /api/app/notification at 462 req/s (median gap 60ms) — retry_after_ms = 30 ms, Speed up GET /api/chair/notification (avg 23ms, 29% of request time), Speed up GET /api/owner/chairs (avg 3767ms, 11% of request time), Add an index on ride_statuses(ride_id, app_sent_at, created_at), Add an index on ride_statuses(ride_id, chair_sent_at, created_at)
 <!-- bench:end -->
 
 ## System (from the repo mirror of /home/isucon: etc/, env.sh, server-info)

@@ -26,3 +26,4 @@
 23:04 | effect 20261029-134923 | #11 owner 窓の絞り込み 効いた（owner/chairs 3767→281ms）/ retry_after 効いた（notification -36%）/ ただし pass=false（マッチング遅れ ×2）
 23:12 | bench 4 20261029-135253 | main fe8a21d（#16 #15 #17） | score 28768 pass=true（9225 FAIL → 3.1 倍） | 特別賞の 88%、CPU is not the limit (idle 53%)
 22:56 | impl/chair-distance #? / #19 | owner/chairs の総距離を要約テーブル chair_distances に（coordinate で加算、init.sh で作り直し） | report 20261029-134509 owner/chairs SQL 54%（#11 後 avg 281ms） | merge 06481fe、OK: 盤 22:55
+22:58 | revert-19 / #21 | [fast] revert #19 (smoke: /api/initialize 500) | — | merge 44ee5fb、OK: fast（事後レビュー）

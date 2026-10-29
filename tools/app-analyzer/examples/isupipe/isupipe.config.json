@@ -1,0 +1,32 @@
+{
+  "//": "ISUCON13 practice (isupipe). Derived from docs/cautionary_note.md + etc/nginx/sites-enabled/isupipe.conf + webapp/sql/initial_users.sql (test001 / test).",
+  "baseURL": "https://pipe.u.isucon.local",
+  "resolve": { "*.u.isucon.local": "18.183.49.79", "pipe.u.isucon.local": "18.183.49.79" },
+  "name": "isupipe",
+  "publishDir": "../../docs/reports",
+  "outDir": "out",
+  "dwellMs": 4000,
+  "settleMs": 800,
+  "concurrency": 3,
+  "maxPages": 30,
+  "navTimeoutMs": 20000,
+  "headless": true,
+  "apiPrefixes": ["/api/"],
+  "openapiPath": "",
+  "codeDir": "../../webapp/go",
+  "schemaPath": "../../webapp/sql/initdb.d/10_schema.sql",
+  "frontendDir": "",
+  "actorNames": {},
+  "stateKeys": ["status", "state", "phase"],
+  "openapiPrefix": "/api",
+  "personas": [
+    { "name": "guest", "seeds": ["/", "/live", "/search", "/login", "/signup"] },
+    {
+      "name": "viewer",
+      "login": { "path": "/api/login", "method": "POST", "body": { "username": "test001", "password": "test" } },
+      "seeds": ["/", "/live", "/search", "/account", "/user/test001", "/watch/1", "/console"],
+      "authCheck": { "method": "GET", "path": "/api/user/me", "expectStatus": 200 },
+      "flows": []
+    }
+  ]
+}

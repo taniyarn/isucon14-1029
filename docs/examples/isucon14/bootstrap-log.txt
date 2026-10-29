@@ -1,0 +1,35 @@
+## bootstrap on ip-172-31-32-161 role=local langs=go user=isucon home=/home/isucon
+## 1. git
+OK   .gitignore generated (58 rules)
+OK   etc/ captured (nginx, mysql, systemd isu*, sysctl, hosts)
+OK   git init
+OK   initial commit
+/tmp/bootstrap/bootstrap.sh: line 24: printf: --: invalid option
+printf: usage: printf [-v var] format [arguments]
+## 2. measurement tools
+OK   apt: unzip
+OK   apt: percona-toolkit
+OK   alp 1.0.21
+OK   slp v0.2.3
+OK   duckdb v1.5.6 (Variegata) 069cc9f9b5
+OK   pt-query-digest present
+OK   sar present
+## 3. web server
+OK   nginx: ltsv access log enabled (nginx.conf.orig kept)
+OK   log dir readable by isucon (group adm)
+## 4. database
+     long_query_time	0.000000
+     slow_query_log	ON
+     slow_query_log_file	/var/log/mysql/slow.log
+OK   mysql: slow log enabled via /etc/mysql/mysql.conf.d/zz-isucon.cnf (remove it or run measure:off before the final bench)
+## 5. server-info
+OK   docs/server-info-ip-172-31-32-161.txt written
+## 6. verify
+     disk free: 5.4G
+OK   alp
+OK   slp
+OK   duckdb
+OK   access.log is ltsv
+OK   slow_query_log=1
+     HEAD: 16f7ee0 bootstrap: initial import (ip-172-31-32-161)
+## done (0 NG)

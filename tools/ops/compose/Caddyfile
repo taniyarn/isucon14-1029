@@ -1,0 +1,11 @@
+{$PANEL_DOMAIN} {
+	encode gzip
+	basic_auth {
+		{$BASIC_USER} {$BASIC_HASH}
+	}
+	reverse_proxy panel:8080
+	log {
+		output stdout
+		format console
+	}
+}

@@ -1,0 +1,56 @@
+# isucon ops host: Caddy (443, auto-TLS, basic auth) -> panel ; tunnel keeps ssh -L forwards to every contest host.
+# Files: .env (PANEL_DOMAIN, BASIC_USER, BASIC_HASH), /opt/isucon-ops/isucon.env (SVC1.., SSH_USER, CONTEST), /opt/isucon-ops/keys/contest_ed25519
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PANEL_DOMAIN: ${PANEL_DOMAIN}
+      BASIC_USER: ${BASIC_USER}
+      BASIC_HASH: ${BASIC_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - panel
+
+  panel:
+    build:
+      context: ../../isumeasure
+    restart: unless-stopped
+    environment:
+      ISUCON_ENV: /opt/isucon-ops/isucon.env
+      OPS_DATA: /opt/isucon-ops/data
+      PANEL_LISTEN: ":8080"
+      AGENT_BASE: http://tunnel:1910
+      CODE_DIR: ${CODE_DIR:-/opt/isucon-ops/repo/webapp/go}
+      RAW_KEEP: ${RAW_KEEP:-20}          # keep raw logs/jsonl/pprof for the newest N runs; reports stay
+      KEEP_ON_HOST: ${KEEP_ON_HOST:-0}   # 1 = do not delete runs on the hosts after collect
+      REPO_DIR: ${REPO_DIR:-/opt/isucon-ops/repo}   # contest repo clone (optional) → commits between runs in the retrospective
+      REPORT_MEM_MB: ${REPORT_MEM_MB:-1024}  # reports run as a child process capped at this (GOMEMLIMIT 3/4); over it → "report failed", the panel survives
+    # container ceiling above REPORT_MEM_MB: a runaway report is killed inside this cgroup (largest process = the report
+    # child) before it can take Caddy / tunnel / sshd down with it. 4 GB host: PANEL_MEM=2g REPORT_MEM_MB=1536
+    mem_limit: ${PANEL_MEM:-1536m}
+    volumes:
+      - /opt/isucon-ops/isucon.env:/opt/isucon-ops/isucon.env:ro
+      - /opt/isucon-ops/data:/opt/isucon-ops/data
+      - /opt/isucon-ops/repo:/opt/isucon-ops/repo:ro
+    depends_on:
+      - tunnel
+
+  tunnel:
+    build: ./tunnel
+    restart: unless-stopped
+    env_file:
+      - /opt/isucon-ops/isucon.env
+    volumes:
+      - /opt/isucon-ops/keys/contest_ed25519:/keys/contest_ed25519:ro
+    # exposes, on the compose network only: 1910N -> svcN agent (19100), 1906N -> pprof (6060), 1330N -> mysql (3306)
+
+volumes:
+  caddy_data:
+  caddy_config:

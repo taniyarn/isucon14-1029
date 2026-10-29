@@ -1,0 +1,44 @@
+{
+  "_comment": "Per-lane agent, model and start line for the start todos (t1 on a new board; lanes 2 / 3 / c by task lane:starts HUB=<name>). agent = claude | codex (task lane:agent prints it; the board shows it on each lane card). The CMD is LANE=<lane> + the agent's template: claude → [OTel env] claude --model <model> '<start>'; codex → codex --model <codex.model or the lane's codex_model> + the flags in templates.codex (verified with codex --help 0.165.0: --approve-for-me = workspace-write sandbox + automatic approval review, network on for gh / git push / ssh, --add-dir the parent dir for ../wt-*). A codex lane's start line gets the lane:msg / lane:inbox note appended (start_codex replaces it). {hub} = the hub's name. fast = the message tells the human to type /fast after the start (claude only). otel = add the OTel env (claude only). Change agents / models here, no code edits; regenerate nothing (AGENTS.md does not depend on this file).",
+  "otel": false,
+  "otel_traces": false,
+  "lanes": {
+    "1": {
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "model_label": "Opus 5.5",
+      "fast": true,
+      "start": "あなたはレーン 1（ハブ）。docs/lanes/README.md と docs/lanes/1-hub.md を読んで従って。最初に ListAgents で自分の名前を出して。",
+      "start_codex": "あなたはレーン 1（ハブ）。AGENTS.md の「Codex で動くとき」、docs/lanes/README.md（§12 も）と docs/lanes/1-hub.md を読んで従って。ListAgents と SendMessage は無い: 自分の名前は lane-1、レーンへの合図は task lane:msg FROM=1 TO=<lane> MSG=\"[…] …\"、受け取りは手順の始めと終わりと待っている間に task lane:inbox LANE=1。"
+    },
+    "2": {
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "model_label": "Opus 5.5",
+      "fast": false,
+      "start": "あなたはレーン 2（インフラ）。docs/lanes/README.md と docs/lanes/2-infra.md を読んで従って。レーン 1 の名前は {hub}。最初に [HELLO] を送って。"
+    },
+    "3": {
+      "agent": "claude",
+      "model": "claude-opus-5-5",
+      "model_label": "Opus 5.5",
+      "fast": false,
+      "start": "あなたはレーン 3（アプリ）。docs/lanes/README.md と docs/lanes/3-app.md を読んで従って。レーン 1 の名前は {hub}。最初に [HELLO] を送って。"
+    },
+    "c": {
+      "agent": "claude",
+      "model": "claude-fable-5-1",
+      "model_label": "Fable 5.1",
+      "fast": false,
+      "start": "あなたはレーン c（スカウト）。docs/lanes/README.md と docs/lanes/c-scout.md を読んで従って。レーン 1 の名前は {hub}。最初に [HELLO] を送って。"
+    }
+  },
+  "templates": {
+    "claude": "claude{model} {start}",
+    "codex": "codex{model} --approve-for-me -c sandbox_workspace_write.network_access=true --add-dir \"$PWD/..\" {start}"
+  },
+  "codex": {
+    "model": "gpt-6.1-sol",
+    "model_label": "GPT-6.1-Sol"
+  }
+}

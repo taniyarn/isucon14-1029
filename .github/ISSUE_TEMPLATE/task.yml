@@ -1,0 +1,55 @@
+name: 改善タスク
+description: report / scan / deep-dive / handoff から出た「やること」1 つ。人もレーン（2 / 3 / c）もこのまま着手できる粒度で書く
+title: "[P?] <何を>（<endpoint か テーブル>）"
+labels: [task]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        1 issue = 1 PR にできる単位。50 行を超える変更は先に「調査」で設計を書いて OK をもらう（CLAUDE.md ルール 6）。
+        Project（GH_PROJECT）に入れるときは `task project:add URL=<この issue の URL> LANE=<人|2|3|c>`。
+  - type: input
+    id: evidence
+    attributes:
+      label: 根拠（report の行）
+      description: "run の TS と、summary.md の行（例: 20261026-155646 P1 GET /api/livestream/:id/reaction avg 154ms 17%）。scan / deep-dive なら docs/plans/… の行"
+      placeholder: "<TS> <P?> <endpoint / SQL> <avg / share>"
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: 何をするか
+      description: 変更の中身を 2〜5 行。触るファイルと関数（claims に書くもの）
+      placeholder: |
+        - webapp/go/reaction_handler.go: getReactionsHandler — 行ごとの fillUserResponse を IN 1 本に
+    validations: { required: true }
+  - type: dropdown
+    id: lane
+    attributes:
+      label: 担当
+      options: [人, 2 インフラ（etc/・deploy.sh・構成）, 3 アプリ（ハンドラ・SQL）, c スカウト（設計・調査）]
+    validations: { required: true }
+  - type: input
+    id: effect
+    attributes:
+      label: 期待効果
+      description: 何が何倍になるか。数字はコードか report から言えるものだけ、それ以外は「推測」
+      placeholder: "GET reaction の SQL 7.9 本 → 3 本 / req（推測: avg 半分）"
+  - type: checkboxes
+    id: risks
+    attributes:
+      label: 触るもの（当てはまるものに印。印があれば PR 本文に対処を書く）
+      options:
+        - label: 応答の形（JSON・ステータス・並び順・null と []）
+        - label: tx / ロック
+        - label: キャッシュ（プロセス内）→ 2 台で正しいか、/initialize で全台捨てるか
+        - label: マニュアルの猶予（何秒）
+        - label: スキーマ（index 以外）
+        - label: 再起動の後に残るか（データ・設定・起動順）
+        - label: ホストに縛られる処理（exec・ローカルファイル・付随サービス）
+  - type: textarea
+    id: verify
+    attributes:
+      label: 確かめ方
+      description: 次の run で何が下がれば効いたと言えるか。smoke で見るもの
+      placeholder: "次の report で GET reaction の avg と share が下がる。task smoke INIT=1 が通る"

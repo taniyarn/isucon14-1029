@@ -1,0 +1,32 @@
+# claims — 誰がどのファイル・関数を変えているか（衝突の予防）
+
+エージェント（とセッション）が**書き始める前に**自分の行を足す宣言表。
+このファイルだけは main に直接 commit してよい（CLAUDE.md ルール 4 の例外）。1 回の commit で触るのはこのファイルだけ。
+
+## 手順（書き始める前に必ず）
+
+1. `git fetch -q && git show origin/main:docs/claims.md` を読む（自分の worktree の古いコピーではなく origin/main）。
+2. 自分が触る予定のファイル・関数と、`status = open` の行を突き合わせる。
+   - **同じ関数** → 衝突。書き始めずにオーケストレーター（人）に報告する。順番を決めるか、片方にまとめる。
+   - **同じファイルの別の関数** → 進めてよい。自分の行の「files / functions」に `(same file as <branch>)` と書く。
+   - 重ならない → 進める。
+3. 自分の行を足して、このファイルだけを main に push する。作業ブランチの上では commit しない（`HEAD:main` で作業の commit まで main に乗る）。origin/main の使い捨て worktree でやる:
+   ```
+   git fetch -q origin && git worktree add -q --detach ../wt-claims-<name> origin/main
+   cd ../wt-claims-<name>      # docs/claims.md の表に 1 行足す
+   git commit -q -m "claims: <branch> open" -- docs/claims.md
+   git push origin HEAD:main || { git pull -q --rebase origin main && git push origin HEAD:main; }
+   cd - && git worktree remove ../wt-claims-<name>
+   ```
+   rebase で表が衝突したら（同時に誰かが足した）、両方の行を残して `git add docs/claims.md && git rebase --continue` → push。足した後にもう一度手順 2 を見る（同時に同じ関数を宣言していないか）。
+4. merge されたら `merged`、やめたら `abandoned` に変え、`updated` を書き換えて同じやり方で push する。触るファイル・関数が増えたら、その時点で行を直す（増えた分も手順 2 で確かめる）。
+
+layer: `SQL only`（クエリと index だけ。ハンドラの流れは変えない）/ `logic`（ハンドラの処理、キャッシュ、tx）/ `config`（`etc/`、`deploy.sh`、`main.go` の設定行）/ `schema`（テーブル追加・列追加、`webapp/sql/`）。`schema` と `logic` は同じテーブルを読む他の行とも重なりやすいので、tables も書く。
+
+練習（2026-10-18、ISUCON14）の実例: PR #15（ridecache）と PR #16（notification を 1 本のクエリに、matching を 1 つの tx に）が同じ 3 つの関数を書き換えていて、merge で 3 ファイルが衝突した（サブエージェントに差し戻して解消）。どちらもこの表に行があれば、書き始める前に分かった。
+
+## 表
+
+| branch | files / functions | layer | owner (session) | status | updated |
+|---|---|---|---|---|---|
+| fix/example/ride-cache（例。消してよい） | `webapp/go/app_handlers.go`: `appGetNotification`, `getLatestRideStatus` | logic | lane2 / subagent ridecache | abandoned | 10:00 |

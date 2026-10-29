@@ -1,0 +1,34 @@
+name: 調査・設計
+description: まだ手が決まっていないもの（律速の特定、50 行を超える構造変更の設計、構成の判断材料）。結論は docs/plans/ に書いて docs の PR にする
+title: "[調査] <問い>"
+labels: [investigation]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 問い
+      description: "何が分かれば次の手が決まるか（例: 「待ち律速の正体はベンチ機か、DB 往復か」）"
+    validations: { required: true }
+  - type: input
+    id: evidence
+    attributes:
+      label: きっかけ（run / report の行）
+      placeholder: "20261026-161953 Verdict: CPU is not the limit (idle 32%)"
+  - type: textarea
+    id: inputs
+    attributes:
+      label: 見るもの
+      description: summary.md の節、deep-dive（DuckDB）のクエリ、コードの場所、マニュアルの見出し
+  - type: textarea
+    id: output
+    attributes:
+      label: 出すもの
+      description: 結論のファイル（docs/plans/<名前>.md）と、決めてほしいこと（人の判断が要るなら選択肢と推奨）
+      placeholder: |
+        - docs/plans/immutable-cache.md（20〜30 行: 何を・書き込み箇所・再起動・2 台・期待効果）
+        - 人の判断: 実装する / しない
+  - type: dropdown
+    id: lane
+    attributes:
+      label: 担当
+      options: [人, c スカウト, 2 インフラ, 3 アプリ]

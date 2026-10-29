@@ -58,3 +58,15 @@
 /webapp/rust/
 # large files (>1MB) and ELF binaries found at bootstrap time
 # --- below this line: yours ---
+
+tools/bootstrap/deploy_key
+tools/bootstrap/deploy_key.pub
+tools/isumeasure/dist/
+tools/ops/compose/.env
+measurements/
+/.env
+.task/
+.claude/worktrees/
+CLAUDE.local.md
+docs/retention/latest.txt
+__pycache__/

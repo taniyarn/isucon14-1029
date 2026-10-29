@@ -1,0 +1,6 @@
+# installed by isucon bootstrap. Delete this file (or set slow_query_log=0) before the final benchmark.
+[mysqld]
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 0
+log_output = FILE

@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "date": "2026-10-28",
+    "slug": "isucon13",
+    "contest_repo": "isucon13-1028",
+    "problem": "ISUCON13",
+    "prize_target": 50000,
+    "kit_commit": "cebf67d",
+    "kit_head": "270ba8f",
+    "models": {
+      "1": {
+        "model": "Opus 5.5",
+        "fast": true
+      },
+      "2": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "3": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "c": {
+        "model": "Fable 5.1",
+        "fast": false
+      }
+    },
+    "model_config": "1 Opus 5.5+fast / 2 3 Opus 5.5 / c Fable 5.1",
+    "bench_machine": null,
+    "hosts": 3,
+    "url_at": "2026-10-28T20:06:13",
+    "notes": {
+      "changed": "index:check と保留、task push / pr:create、setup B/D と early-fix を webapp 到着で開始、docs PR を code の ship に混ぜる、最小 smoke、盤の long-poll と通知音",
+      "hypothesis": "ベンチ 1→2 の止まりを消せば ベンチ 2 が URL から 10 分前後で回る",
+      "observations": "20.1 分（ベンチ 3 で越えた。ベンチ 2 は 44,101 で届かず）。baseline が 8 分かかり、ベンチ 2 の PR は OK 済みのまま約 5 分待った。hooks のレーンが全部 ?（LANE が付いていない）"
+    }
+  },
+  "north_star": 20.1,
+  "speed": {
+    "url_to_baseline_ready_min": 5.1,
+    "benches_to_prize": 3,
+    "loop_median_min": 4.5,
+    "ship_median_s": 25,
+    "ship_max_s": 92,
+    "deploy_median_s": 17
+  },
+  "outcome": {
+    "score_at_60min_ratio": 1.83,
+    "best_ratio": 1.83,
+    "best_score": 91482,
+    "runs": 8,
+    "fails": 0,
+    "new_5xx_alerts": 2,
+    "reverts": 1,
+    "reboot_test": "not_run"
+  },
+  "agents": {
+    "1": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 0,
+      "alerts_raised": 5,
+      "permission_wait_s": null
+    },
+    "2": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 6,
+      "alerts_raised": 1,
+      "permission_wait_s": null
+    },
+    "3": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 0,
+      "alerts_raised": 0,
+      "permission_wait_s": null
+    },
+    "c": {
+      "model": "Fable 5.1",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 1,
+      "alerts_raised": 2,
+      "permission_wait_s": null
+    }
+  },
+  "agents_total": {
+    "cost_usd": null,
+    "cost_to_prize_usd": null,
+    "merged_prs": 22,
+    "merged_unattributed": 15,
+    "merged_per_usd": null
+  },
+  "human": {
+    "todos": 37,
+    "response_median_s": {
+      "bench": 99,
+      "input": 206,
+      "otel": 50,
+      "other": 41,
+      "pick": 16,
+      "question": 25,
+      "review": 11,
+      "start": 58,
+      "url": 232
+    },
+    "total_wait_min": 17.5,
+    "wait_before_prize_min": 7.4,
+    "decisions": {
+      "choices": 7,
+      "picks": 1,
+      "pr_reviews": 11
+    }
+  },
+  "safety": {
+    "crit_alerts": 4,
+    "review_catches": 2,
+    "dq_risks_found": null
+  },
+  "pr_lanes": {
+    "1": "?",
+    "2": "?",
+    "3": "2",
+    "4": "?",
+    "5": "2",
+    "6": "c",
+    "7": "?",
+    "8": "?",
+    "9": "?",
+    "10": "2",
+    "11": "?",
+    "12": "?",
+    "13": "?",
+    "14": "2",
+    "15": "?",
+    "16": "?",
+    "17": "?",
+    "18": "2",
+    "19": "?",
+    "20": "?",
+    "24": "?",
+    "25": "2"
+  }
+}

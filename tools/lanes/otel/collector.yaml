@@ -1,0 +1,25 @@
+# Local OpenTelemetry Collector for Claude Code's own telemetry (task otel:up). OTLP gRPC on 127.0.0.1:4317 (the port is
+# published on loopback only) → one JSON-lines file per signal under <board dir>/otel/ (task lane:timeline reads logs.jsonl).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+exporters:
+  file/logs:
+    path: /out/logs.jsonl
+  file/metrics:
+    path: /out/metrics.jsonl
+  file/traces:
+    path: /out/traces.jsonl
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [file/logs]
+    metrics:
+      receivers: [otlp]
+      exporters: [file/metrics]
+    traces:
+      receivers: [otlp]
+      exporters: [file/traces]

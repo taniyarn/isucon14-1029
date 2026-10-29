@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "date": "2026-10-28",
+    "slug": "isucon14",
+    "contest_repo": "isucon14-1028",
+    "problem": "ISUCON14",
+    "prize_target": 32767,
+    "kit_commit": "a5e9d06",
+    "kit_head": "bbbbbdc",
+    "models": {
+      "1": {
+        "model": "Opus 5.5",
+        "fast": true
+      },
+      "2": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "3": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "c": {
+        "model": "Fable 5.1",
+        "fast": false
+      }
+    },
+    "model_config": "1 Opus 5.5+fast / 2 3 Opus 5.5 / c Fable 5.1",
+    "bench_machine": null,
+    "hosts": 3,
+    "url_at": "2026-10-28T00:46:53",
+    "notes": {
+      "changed": "ベンチ 2 に setup・early-fix・先読みの手をまとめる、PICKS・CHOICES のカード・通知、ship の止まり方、帯の修正、panel のベンチ終わった帯・FAIL",
+      "hypothesis": "大きい手をベンチ 2 に載せれば特別賞がベンチ 2 で取れ、URL→特別賞が 12〜13 分になる",
+      "observations": "15.9 分、ベンチ 2 で越えた。新しい index（coupons）で deadlock が再発しベンチ 4 が −14%。ship の smoke 失敗 1 回"
+    }
+  },
+  "north_star": 15.9,
+  "speed": {
+    "url_to_baseline_ready_min": 3.7,
+    "benches_to_prize": 2,
+    "loop_median_min": 6.9,
+    "ship_median_s": 22,
+    "ship_max_s": 58,
+    "deploy_median_s": 18
+  },
+  "outcome": {
+    "score_at_60min_ratio": 1.652,
+    "best_ratio": 1.652,
+    "best_score": 54135,
+    "runs": 6,
+    "fails": 0,
+    "new_5xx_alerts": 2,
+    "reverts": 0,
+    "reboot_test": "not_run"
+  },
+  "agents": {
+    "1": {
+      "model": "Opus 5.5",
+      "cost_usd": 16.97,
+      "turns": 51,
+      "turn_median_s": 18,
+      "busy_min": 22.3,
+      "idle_min_before_prize": 4.0,
+      "idle_breakdown": {
+        "human": 0.6,
+        "other_lane": 0.8,
+        "nothing": 0.5,
+        "subagent": 1.4,
+        "unmarked": 0.7
+      },
+      "merged_prs": 0,
+      "alerts_raised": 4,
+      "permission_wait_s": 0
+    },
+    "2": {
+      "model": "Opus 5.5",
+      "cost_usd": 13.21,
+      "turns": 20,
+      "turn_median_s": 38,
+      "busy_min": 17.8,
+      "idle_min_before_prize": 4.5,
+      "idle_breakdown": {
+        "human": 1.2,
+        "other_lane": 2.4,
+        "nothing": 0.0,
+        "subagent": 1.0,
+        "unmarked": 0.0
+      },
+      "merged_prs": 5,
+      "alerts_raised": 0,
+      "permission_wait_s": 0
+    },
+    "3": {
+      "model": "Opus 5.5",
+      "cost_usd": 10.18,
+      "turns": 6,
+      "turn_median_s": 37,
+      "busy_min": 5.1,
+      "idle_min_before_prize": 2.3,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 2.3,
+        "nothing": 0.0,
+        "subagent": 0.0,
+        "unmarked": 0.0
+      },
+      "merged_prs": 9,
+      "alerts_raised": 0,
+      "permission_wait_s": 0
+    },
+    "c": {
+      "model": "Fable 5.1",
+      "cost_usd": 10.2,
+      "turns": 14,
+      "turn_median_s": 59,
+      "busy_min": 16.4,
+      "idle_min_before_prize": 7.4,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 7.1,
+        "nothing": 0.3,
+        "subagent": 0.0,
+        "unmarked": 0.0
+      },
+      "merged_prs": 1,
+      "alerts_raised": 1,
+      "permission_wait_s": 0
+    }
+  },
+  "agents_total": {
+    "cost_usd": 50.56,
+    "cost_to_prize_usd": 22.62,
+    "merged_prs": 20,
+    "merged_unattributed": 5,
+    "merged_per_usd": 0.4
+  },
+  "human": {
+    "todos": 26,
+    "response_median_s": {
+      "bench": 152,
+      "input": 241,
+      "otel": 31,
+      "other": 25,
+      "pick": 42,
+      "question": 37,
+      "review": 9,
+      "start": 76,
+      "url": 260
+    },
+    "total_wait_min": 17.9,
+    "wait_before_prize_min": 6.9,
+    "decisions": {
+      "choices": 1,
+      "picks": 2,
+      "pr_reviews": 6
+    }
+  },
+  "safety": {
+    "crit_alerts": 3,
+    "review_catches": 1,
+    "dq_risks_found": null
+  },
+  "pr_lanes": {
+    "1": "?",
+    "4": "c",
+    "5": "2",
+    "6": "3",
+    "7": "2",
+    "8": "3",
+    "9": "?",
+    "10": "2",
+    "11": "3",
+    "12": "2",
+    "13": "?",
+    "14": "3",
+    "15": "2",
+    "16": "3",
+    "17": "?",
+    "18": "3",
+    "19": "3",
+    "20": "?",
+    "22": "3",
+    "23": "3"
+  }
+}

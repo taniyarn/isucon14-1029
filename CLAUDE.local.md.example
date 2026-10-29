@@ -1,0 +1,6 @@
+# CLAUDE.local.md — per-person settings (gitignored). Copy to CLAUDE.local.md and edit.
+# Claude Code loads this file next to CLAUDE.md; it is not shared with the team.
+
+# Default (CLAUDE.md) is Japanese. Uncomment ONE line:
+# Reply language: English. Answer in English even when the request is in Japanese; docs you write may stay Japanese.
+# Reply language: Japanese. 日本語で返答する。

@@ -1,0 +1,107 @@
+{
+  "//": "Written by the app-analysis skill at the start of the day (docs/app-annotations.json in the contest repo). ISUCON13 practice example. Keys: screen paths as in the crawl, endpoints as 'METHOD /path' with every param as :id. roles: the report's inferred role keys (Flows) → a name; written after the first bench.",
+  "screens": {
+    "/": {
+      "purpose": "トップ: おすすめ配信の一覧（検索・タグ）"
+    },
+    "/watch/1": {
+      "purpose": "視聴: コメント・投げ銭（スコア）とリアクション"
+    },
+    "/console": {
+      "purpose": "配信者コンソール: 自分の配信、NG ワード、スパム報告"
+    },
+    "/account": {
+      "purpose": "アカウント: アイコン変更"
+    }
+  },
+  "endpoints": {
+    "POST /api/livestream/:id/livecomment": {
+      "purpose": "コメント投稿。tip がスコアになる"
+    },
+    "GET /api/livestream/:id/livecomment": {
+      "purpose": "コメント一覧（視聴画面のポーリング）"
+    },
+    "GET /api/livestream/:id/reaction": {
+      "purpose": "リアクション一覧（視聴画面のポーリング）"
+    },
+    "POST /api/livestream/:id/reaction": {
+      "purpose": "リアクション投稿"
+    },
+    "GET /api/user/:id/icon": {
+      "purpose": "アイコン画像。If-None-Match が icon_hash と一致すれば 304 可"
+    },
+    "POST /api/icon": {
+      "purpose": "アイコン変更"
+    },
+    "POST /api/register": {
+      "purpose": "ユーザー登録。サブドメインの A レコードも作る"
+    },
+    "POST /api/livestream/:id/moderate": {
+      "purpose": "NG ワード登録と、一致する過去コメントの削除"
+    }
+  },
+  "rules": [
+    {
+      "text": "アイコン変更は 2 秒以内に icon_hash と画像の両方へ反映（MUST）",
+      "source": "app.md アイコン画像配信",
+      "endpoints": [
+        "POST /api/icon",
+        "GET /api/user/:id/icon",
+        "GET /api/user/:id"
+      ],
+      "tables": [
+        "icons"
+      ]
+    },
+    {
+      "text": "条件付きでない GET に 304 を返さない",
+      "source": "app.md アイコン画像配信",
+      "endpoints": [
+        "GET /api/user/:id/icon"
+      ]
+    },
+    {
+      "text": "bcrypt のアルゴリズムとコストを変えない",
+      "source": "app.md パスワード",
+      "endpoints": [
+        "POST /api/register",
+        "POST /api/login"
+      ],
+      "tables": [
+        "users"
+      ]
+    },
+    {
+      "text": "/api/initialize は 42 秒以内、応答に言語名、DNS ゾーンも初期化",
+      "source": "day.md 負荷走行・初期化",
+      "endpoints": [
+        "POST /api/initialize"
+      ]
+    },
+    {
+      "text": "登録したユーザーのサブドメインが DNS で引けること（UDP/53、A レコードのみ）",
+      "source": "day.md DNS",
+      "endpoints": [
+        "POST /api/register"
+      ],
+      "tables": [
+        "isudns.records"
+      ]
+    },
+    {
+      "text": "スコア = 投げ銭（tip）の合計。コメントの書き込みは落とさない",
+      "source": "day.md スコア計算",
+      "endpoints": [
+        "POST /api/livestream/:id/livecomment"
+      ],
+      "tables": [
+        "livecomments"
+      ]
+    }
+  ],
+  "roles": {
+    "POST /api/livestream/:livestream_id/livecomment + POST /api/livestream/:livestream_id/reaction": "視聴者（コメント・投げ銭とリアクション）",
+    "POST /api/livestream/:livestream_id/moderate + POST /api/livestream/reservation": "配信者（予約とモデレーション）",
+    "POST /api/icon": "新規ユーザー（登録してアイコン設定）"
+  }
+}

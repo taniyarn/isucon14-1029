@@ -1,0 +1,90 @@
+{
+  "baseURL": "https://xiv.isucon.net",
+  "outDir": "out",
+  "dwellMs": 5000,
+  "maxPages": 25,
+  "navTimeoutMs": 20000,
+  "headless": true,
+  "apiPrefixes": [
+    "/api/"
+  ],
+  "personas": [
+    {
+      "name": "guest",
+      "seeds": [
+        "/",
+        "/client/login",
+        "/client/register",
+        "/owner/login",
+        "/owner/register",
+        "/simulator"
+      ]
+    },
+    {
+      "name": "user",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "cookies": [
+        {
+          "name": "app_session",
+          "value": "d175bd9d34b9c4e0b3d9864a07ccee37f043b9df1e77ca20c78bc5878a537dc6"
+        }
+      ],
+      "seeds": [
+        "/client",
+        "/client/history",
+        "/client/user",
+        "/client/register-payment"
+      ],
+      "flows": [
+        {
+          "name": "ride-lifecycle",
+          "script": "flows/isuride-ride-lifecycle.mjs",
+          "dwellMs": 1500
+        }
+      ],
+      "vars": {
+        "chairToken": "3013d5ec84e1b230f913a17d71ef27c8d09d777b1cce7a3c1e2ffd4040848411",
+        "paymentToken": "tok_isucon_analyzer"
+      },
+      "authCheck": {
+        "method": "GET",
+        "path": "/api/app/notification",
+        "expectStatus": 200
+      }
+    },
+    {
+      "name": "owner",
+      "cookies": [
+        {
+          "name": "owner_session",
+          "value": "7188f2fb45c7d81a6ba30d1572cfff37b3857e66f7b50513bbf89eb2c4bc0ac7"
+        }
+      ],
+      "seeds": [
+        "/owner",
+        "/owner/sales"
+      ],
+      "authCheck": {
+        "method": "GET",
+        "path": "/api/owner/chairs",
+        "expectStatus": 200
+      }
+    }
+  ],
+  "openapiPath": "/Users/yamazoe/repos/github.com/isucon/isucon14/webapp/openapi.yaml",
+  "openapiPrefix": "/api",
+  "name": "isuride",
+  "publishDir": "../../docs/reports",
+  "codeDir": "/Users/yamazoe/repos/github.com/isucon/isucon14/webapp/go",
+  "actorNames": {
+    "app": "user",
+    "chair": "chair",
+    "owner": "owner",
+    "internal": "internal"
+  },
+  "frontendDir": "/Users/yamazoe/repos/github.com/isucon/isucon14/frontend/app",
+  "schemaPath": "/Users/yamazoe/repos/github.com/isucon/isucon14/webapp/sql/1-schema.sql"
+}

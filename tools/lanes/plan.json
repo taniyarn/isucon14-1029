@@ -1,0 +1,329 @@
+{
+  "_comment": "Roadmap for task lane:web (🗺). One step = {id, lane: 1|2|3|c|bench, title, deps, stage (column, left to right), how (when it is done / the command)}. Edit per contest (the hub commits it). bench steps B1..B4 and P1 are ticked automatically from the ops panel's scored runs; the others with task lane:step ID=… STATE=doing|done|skip. Optional \"auto\": {branches, not, files} (fnmatch globs; * crosses /): task hub:ship marks the step done with NOTE \"PR #n\" when a merged PR's head branch matches branches (and no not) or one of its files matches files (lanes.py autostep). Optional \"done_on\": [regex] (re.search on the one-line message): when the step's lane sends a matching [PR] / [DONE] / [PICK] (SendMessage via cchook.py, or task lane:msg) the step is done with the message as NOTE (lanes.py msg_steps). B1..B4 are also ticked when a bench ends (「終わった」 on the bench todo, or runs:wait's scored run; lanes.py bench_step). An automatic done wins over a manual todo / doing. 前半（コンテスト開始 → 3 回目のベンチ）だけを描く。ループ（parallel-fix / deep-dive の繰り返し、12:30 / 15:00 / 16:00 の区切り）は描かない。",
+  "steps": [
+    {
+      "id": "H1",
+      "lane": "1",
+      "title": "URL → マニュアル保存・kickoff ①",
+      "deps": [],
+      "stage": 0,
+      "how": "docs/manual/day.md と app.md を commit、docs/kickoff.md の下書きを push、[TASK] c manual"
+    },
+    {
+      "id": "I1",
+      "lane": "2",
+      "title": "HOSTS todo → host:peek",
+      "deps": [],
+      "stage": 0,
+      "how": "人が .env に HOSTS → task host:peek で前提（DB・nginx・unit・言語）を確認、外れは alert",
+      "done_on": [
+        "^\\[DONE\\] 2 peek"
+      ]
+    },
+    {
+      "id": "A1",
+      "lane": "3",
+      "title": "マニュアルとコードの下読み",
+      "deps": [],
+      "stage": 0,
+      "how": "docs/manual と webapp/ のルーター・スキーマを読み、N+1 の目星を頭に入れる",
+      "done_on": [
+        "^\\[DONE\\] 3 crawl",
+        "^\\[PR\\] #\\d+ ready .*(integ-early|app-map|app-early)"
+      ]
+    },
+    {
+      "id": "C1",
+      "lane": "c",
+      "title": "manual: 型と先読みの手",
+      "deps": [
+        "H1"
+      ],
+      "stage": 0,
+      "how": "[TASK] c manual → 問題の型（FIRST-HOUR）と「自由・余裕をくれる文」を返答に、[DONE] c manual <型> で自動 done",
+      "done_on": [
+        "^\\[DONE\\] c manual"
+      ]
+    },
+    {
+      "id": "I2",
+      "lane": "2",
+      "title": "hosts:setup（0 NG）",
+      "deps": [
+        "I1"
+      ],
+      "stage": 1,
+      "how": "人が ! task hosts:setup → NG 0、task hosts:status で 3 台 idle"
+    },
+    {
+      "id": "I3",
+      "lane": "2",
+      "title": "deploy:init → [DONE] servers",
+      "deps": [
+        "I2"
+      ],
+      "stage": 1,
+      "how": "task deploy:init → deploy.sh CONFIGURED=1 を commit、練習専用の前提（DNS の答え・SG）→ [DONE] servers",
+      "done_on": [
+        "^\\[DONE\\] servers"
+      ]
+    },
+    {
+      "id": "B1",
+      "lane": "bench",
+      "title": "baseline ベンチ（初期状態）",
+      "deps": [
+        "I3"
+      ],
+      "stage": 2,
+      "how": "自動: panel に score の入った run が 1 本"
+    },
+    {
+      "id": "H2",
+      "lane": "1",
+      "title": "kickoff ② 前提の確認",
+      "deps": [
+        "I3"
+      ],
+      "stage": 2,
+      "how": "docs/kickoff.md の前提の確認・先読みの手、CLAUDE.md 冒頭、alp.yml、analyzer config（バックグラウンド）"
+    },
+    {
+      "id": "I4",
+      "lane": "2",
+      "title": "parallel-setup PR（DB 分離・計測・free wins）",
+      "deps": [
+        "I3"
+      ],
+      "stage": 2,
+      "how": "integ/setup の PR → [PR] #n ready setup",
+      "auto": {
+        "branches": [
+          "integ/setup*",
+          "setup/*"
+        ],
+        "not": [
+          "setup/app-map*"
+        ]
+      }
+    },
+    {
+      "id": "A2",
+      "lane": "3",
+      "title": "app-map PR + N+1 の目星",
+      "deps": [
+        "I3"
+      ],
+      "stage": 2,
+      "how": "docs/app-map.md の PR、docs/plans/app-early.md",
+      "auto": {
+        "branches": [
+          "setup/app-map*",
+          "docs/app-map*"
+        ],
+        "files": [
+          "docs/app-map.md"
+        ]
+      }
+    },
+    {
+      "id": "C2",
+      "lane": "c",
+      "title": "early-scan → [PICK] → 先読み PR",
+      "deps": [
+        "I3",
+        "C1"
+      ],
+      "stage": 2,
+      "how": "technique-scan（早期）→ [PICK] → 人の答え → 先読みの手を 1〜3 本 PR（[PR] をハブへ）。merge は ship #1（H4）に載る",
+      "auto": {
+        "branches": [
+          "early/*",
+          "design/early-*"
+        ],
+        "files": [
+          "docs/plans/early-*.md"
+        ]
+      },
+      "done_on": [
+        "^\\[DONE\\] c early-scan",
+        "^\\[PICK\\]"
+      ]
+    },
+    {
+      "id": "H3",
+      "lane": "1",
+      "title": "plan（actions:plan）+ [TASK] 配布",
+      "deps": [
+        "B1"
+      ],
+      "stage": 3,
+      "how": "task actions:plan TS=<baseline> を commit → [TASK] 3 fix / [TASK] c technique-scan / [TASK] 2 fix"
+    },
+    {
+      "id": "A3",
+      "lane": "3",
+      "title": "parallel-fix #1 PR",
+      "deps": [
+        "H3"
+      ],
+      "stage": 3,
+      "how": "integ/<ts> の PR → [PR] #n ready integ-<ts>",
+      "auto": {
+        "branches": [
+          "integ/[0-9]*",
+          "integ-[0-9]*",
+          "fix/[0-9]*/*"
+        ],
+        "not": [
+          "*/ops",
+          "*/ops-*",
+          "*-ops"
+        ]
+      }
+    },
+    {
+      "id": "C3",
+      "lane": "c",
+      "title": "technique-scan（run あり）",
+      "deps": [
+        "B1"
+      ],
+      "stage": 3,
+      "how": "technique-scan（run あり）: docs/technique-scan-<ts>.md と docs/plans/<ts>-techniques.md → [DONE] c technique-scan。○ の手はハブが [TASK] 3 fix PLAN=…（設定・構成は [TASK] 2）で A4 へ",
+      "auto": {
+        "branches": [
+          "scan/[0-9]*"
+        ],
+        "files": [
+          "docs/technique-scan-[0-9]*.md",
+          "docs/plans/[0-9]*-techniques.md"
+        ]
+      },
+      "done_on": [
+        "^\\[DONE\\] c technique-scan"
+      ]
+    },
+    {
+      "id": "I5",
+      "lane": "2",
+      "title": "ops グループ PR",
+      "deps": [
+        "H3"
+      ],
+      "stage": 3,
+      "how": "plan の ops グループ（接続数・設定・ワーカー）の PR",
+      "auto": {
+        "branches": [
+          "fix/*/ops",
+          "fix/*/ops-*",
+          "integ/*-ops",
+          "integ/*/ops"
+        ]
+      }
+    },
+    {
+      "id": "A4",
+      "lane": "3",
+      "title": "scan の手の実装 PR（設定・構成ならレーン 2）",
+      "deps": [
+        "C3"
+      ],
+      "stage": 4,
+      "how": "C3 の docs/plans/<ts>-techniques.md の ○ を parallel-fix の形で PR（[TASK] 3 fix PLAN=… / 設定は [TASK] 2）。間に合えば ship #2（H5）に載る",
+      "auto": {
+        "branches": [
+          "impl/*",
+          "integ/*",
+          "integ-*"
+        ],
+        "not": [
+          "integ/setup*",
+          "integ/early*",
+          "integ/[0-9]*",
+          "integ-[0-9]*",
+          "*-ops",
+          "*/ops"
+        ]
+      }
+    },
+    {
+      "id": "H4",
+      "lane": "1",
+      "title": "ship #1（setup + c の PR）",
+      "deps": [
+        "B1",
+        "I4"
+      ],
+      "stage": 4,
+      "how": "baseline の run が ended の時点で OK の出ている PR を全部（setup、c の先読み。fix #1 が間に合えばそれも）→ task hub:ship PRS=\"…\"。間に合わない PR を待ってベンチを空けない",
+      "soft": [
+        "C2",
+        "A3"
+      ]
+    },
+    {
+      "id": "B2",
+      "lane": "bench",
+      "title": "2 回目のベンチ",
+      "deps": [
+        "H4"
+      ],
+      "stage": 4,
+      "how": "自動: score の入った run が 2 本"
+    },
+    {
+      "id": "H5",
+      "lane": "1",
+      "title": "ship #2（fix #1 …）",
+      "deps": [
+        "B2",
+        "A3"
+      ],
+      "stage": 5,
+      "how": "2 回目のベンチの後、OK 済みの fix / ops / c の PR を全部 task hub:ship（technique-scan の手はレーン 2 / 3 が PR にしてからここに入る）",
+      "soft": [
+        "A4",
+        "I5"
+      ]
+    },
+    {
+      "id": "B3",
+      "lane": "bench",
+      "title": "3 回目のベンチ",
+      "deps": [
+        "H5"
+      ],
+      "stage": 5,
+      "how": "自動: score の入った run が 3 本"
+    },
+    {
+      "id": "P1",
+      "lane": "bench",
+      "title": "🏆 特別賞スコア到達（ここから先は run → fix / deep-dive のループ）",
+      "deps": [
+        "B3"
+      ],
+      "stage": 6,
+      "how": "自動: 最高 score ≥ alp.yml の prize_target"
+    },
+    {
+      "id": "H6",
+      "lane": "1",
+      "title": "チーム合流（handoff）",
+      "deps": [
+        "P1"
+      ],
+      "stage": 7,
+      "how": "合流の目安（lanes README §11）に当たったら人に聞く → handoff skill → docs/handoff.md の PR",
+      "auto": {
+        "branches": [
+          "docs/handoff*"
+        ],
+        "files": [
+          "docs/handoff.md"
+        ]
+      }
+    }
+  ]
+}

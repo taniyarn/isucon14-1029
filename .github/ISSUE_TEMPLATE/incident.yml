@@ -1,0 +1,32 @@
+name: 障害・失格の芽
+description: ベンチの FAIL、新しい 5xx、スコア −10%、smoke の失敗、再起動試験で見つかったこと。まず事実を書き、直す手は別の改善タスクに
+title: "[障害] <症状>"
+labels: [incident]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 種類
+      options: [ベンチ FAIL, 新しい 5xx, スコア −10% 以上, smoke 失敗, 再起動試験, 整合性チェック, その他]
+    validations: { required: true }
+  - type: textarea
+    id: facts
+    attributes:
+      label: 事実
+      description: run の TS・main の commit・ベンチの出力の行・report の Errors の行・時刻。推測は書かない
+      render: text
+    validations: { required: true }
+  - type: input
+    id: suspect
+    attributes:
+      label: 直前に入った変更（PR）
+      placeholder: "#28（TTL 0→60）"
+  - type: dropdown
+    id: action
+    attributes:
+      label: 今の対処
+      options: [revert した, revert の PR を出した, 調査中, 対応不要と決めた（理由を下に）]
+  - type: textarea
+    id: notes
+    attributes:
+      label: メモ（原因の見立て、再発防止）

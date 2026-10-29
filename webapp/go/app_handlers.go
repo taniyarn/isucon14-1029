@@ -673,7 +673,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, http.StatusOK, &appGetNotificationResponse{
-				RetryAfterMs: 30,
+				RetryAfterMs: 200,
 			})
 			return
 		}
@@ -720,7 +720,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: ride.CreatedAt.UnixMilli(),
 			UpdateAt:  ride.UpdatedAt.UnixMilli(),
 		},
-		RetryAfterMs: 30,
+		RetryAfterMs: 200,
 	}
 
 	if ride.ChairID.Valid {
@@ -876,11 +876,21 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	// active chairs without an unfinished ride (COMPLETED is the terminal status, so
 	// "latest status != COMPLETED" == "no COMPLETED status"), in one query instead of rides × statuses per chair
-	chairs := []Chair{}
+	// latest location joined in the same query (was one chair_locations query per chair);
+	// chairs without a location are dropped by the inner join, as the old ErrNoRows `continue` did
+	chairs := []struct {
+		ID        string `db:"id"`
+		Name      string `db:"name"`
+		Model     string `db:"model"`
+		Latitude  int    `db:"latitude"`
+		Longitude int    `db:"longitude"`
+	}{}
 	err = tx.SelectContext(
 		ctx,
 		&chairs,
-		`SELECT * FROM chairs c WHERE c.is_active = TRUE AND NOT EXISTS (
+		`SELECT c.id, c.name, c.model, cl.latitude, cl.longitude FROM chairs c
+		 JOIN chair_locations cl ON cl.id = (SELECT id FROM chair_locations WHERE chair_id = c.id ORDER BY created_at DESC LIMIT 1)
+		 WHERE c.is_active = TRUE AND NOT EXISTS (
 		   SELECT 1 FROM rides r WHERE r.chair_id = c.id
 		   AND NOT EXISTS (SELECT 1 FROM ride_statuses rs WHERE rs.ride_id = r.id AND rs.status = 'COMPLETED')
 		 ) ORDER BY c.id`,
@@ -892,31 +902,14 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
 	for _, chair := range chairs {
-
-		// 最新の位置情報を取得
-		chairLocation := &ChairLocation{}
-		err = tx.GetContext(
-			ctx,
-			chairLocation,
-			`SELECT * FROM chair_locations WHERE chair_id = ? ORDER BY created_at DESC LIMIT 1`,
-			chair.ID,
-		)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				continue
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chairLocation.Latitude, chairLocation.Longitude) <= distance {
+		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chair.Latitude, chair.Longitude) <= distance {
 			nearbyChairs = append(nearbyChairs, appGetNearbyChairsResponseChair{
 				ID:    chair.ID,
 				Name:  chair.Name,
 				Model: chair.Model,
 				CurrentCoordinate: Coordinate{
-					Latitude:  chairLocation.Latitude,
-					Longitude: chairLocation.Longitude,
+					Latitude:  chair.Latitude,
+					Longitude: chair.Longitude,
 				},
 			})
 		}

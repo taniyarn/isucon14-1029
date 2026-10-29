@@ -1,0 +1,115 @@
+{
+  "//": "Written by the app-analysis skill (ISUCON14 ISURIDE practice 2026-10-29). Keys: screen paths as in the crawl, endpoints as 'METHOD /path' with every param as :id. roles: filled in after the first bench.",
+  "screens": {
+    "/": { "purpose": "ランディング: client / owner / simulatorへのリンク" },
+    "/client/login": { "purpose": "userのsessionTokenをCookieに入れるだけ（ログインAPIは無い）" },
+    "/client/register": { "purpose": "user登録（招待コードでクーポン）。ユーザー増加の入口" },
+    "/client": { "purpose": "配車: 位置選択 → 見積 → 配車依頼 → 進行表示 → 評価（スコアの導線）" },
+    "/client/history": { "purpose": "完了したライドの履歴" },
+    "/client/user": { "purpose": "ユーザー情報・切替" },
+    "/client/register-payment": { "purpose": "決済トークン登録（評価=決済の前提）" },
+    "/owner/login": { "purpose": "ownerのsessionTokenをCookieに入れるだけ" },
+    "/owner/register": { "purpose": "owner登録" },
+    "/owner": { "purpose": "椅子一覧と総走行距離（3秒の猶予）" },
+    "/owner/sales": { "purpose": "期間の売上（椅子別 / モデル別）。ownerはこれを見て椅子を増やす" },
+    "/simulator": { "purpose": "椅子シミュレーター: 通知ポーリング、座標送信、状態更新" }
+  },
+  "endpoints": {
+    "POST /api/initialize": { "purpose": "init.shをexecして全テーブル再作成、payment_serverをsettingsに保存。30秒以内、language=go" },
+    "POST /api/app/users": { "purpose": "user登録。クーポン付与（新規・招待最大3人）" },
+    "POST /api/app/payment-methods": { "purpose": "決済トークン登録（1ユーザー1件）" },
+    "GET /api/app/rides": { "purpose": "完了ライドの履歴" },
+    "POST /api/app/rides": { "purpose": "配車依頼 → MATCHING。未完了ライドがあれば409、クーポン消費" },
+    "POST /api/app/rides/estimated-fare": { "purpose": "運賃見積（クーポン込み、書き込みなし）" },
+    "POST /api/app/rides/:id/evaluation": { "purpose": "評価 → COMPLETED。txの中で外部の決済GWを呼ぶ（ライド完了=スコア）" },
+    "GET /api/app/notification": { "purpose": "userの通知ポーリング。未送信statusを古い順に返しapp_sent_atを書く" },
+    "GET /api/app/nearby-chairs": { "purpose": "空いている椅子の現在位置（座標は3秒の猶予）" },
+    "POST /api/owner/owners": { "purpose": "owner登録" },
+    "GET /api/owner/sales": { "purpose": "ownerの売上集計。椅子の追加判断に使われる" },
+    "GET /api/owner/chairs": { "purpose": "ownerの椅子一覧と総走行距離（3秒の猶予）" },
+    "POST /api/chair/chairs": { "purpose": "椅子登録（chair_register_token）" },
+    "POST /api/chair/activity": { "purpose": "椅子の配車受付ON/OFF（is_active）" },
+    "POST /api/chair/coordinate": { "purpose": "椅子の位置送信。乗車位置 / 目的地に着くとPICKUP / ARRIVEDを書く（書き込み最多）" },
+    "GET /api/chair/notification": { "purpose": "椅子の通知ポーリング。未送信statusを返しchair_sent_atを書く" },
+    "POST /api/chair/rides/:id/status": { "purpose": "椅子がENROUTE / CARRYINGに進める" },
+    "GET /api/internal/matching": { "purpose": "isuride-matcherが既定500msごとに呼ぶ。待ちライド1件にランダムな空き椅子を割当（仕様変更自由）" }
+  },
+  "rules": [
+    {
+      "text": "通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL",
+      "source": "app.md 通知の順序 / day.md 負荷走行の打ち切り",
+      "endpoints": ["GET /api/app/notification", "GET /api/chair/notification"],
+      "tables": ["ride_statuses"]
+    },
+    {
+      "text": "通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予",
+      "source": "app.md 通知エンドポイント / day.md 猶予時間",
+      "endpoints": ["GET /api/app/notification", "GET /api/chair/notification", "GET /api/internal/matching"],
+      "tables": ["rides", "ride_statuses"]
+    },
+    {
+      "text": "SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る",
+      "source": "app.md SSE(Server-Sent Events)",
+      "endpoints": ["GET /api/app/notification", "GET /api/chair/notification"]
+    },
+    {
+      "text": "nearby-chairsの座標は過去3秒以内にcoordinateで送られた座標と一致",
+      "source": "day.md 猶予時間",
+      "endpoints": ["GET /api/app/nearby-chairs", "POST /api/chair/coordinate"],
+      "tables": ["chair_locations"]
+    },
+    {
+      "text": "owner/chairsの総走行距離はcoordinateから3秒以内に反映",
+      "source": "day.md 猶予時間",
+      "endpoints": ["GET /api/owner/chairs", "POST /api/chair/coordinate"],
+      "tables": ["chair_locations"]
+    },
+    {
+      "text": "二重請求・未払い・誤った金額はクリティカル。リトライは支払履歴かIdempotency-Keyで冪等に。負荷終了後5秒以内に決済完了",
+      "source": "app.md 決済マイクロサービス / day.md 負荷走行・負荷走行の打ち切り",
+      "endpoints": ["POST /api/app/rides/:id/evaluation"],
+      "tables": ["rides", "ride_statuses", "payment_tokens", "settings"]
+    },
+    {
+      "text": "userは未完了ライドがあると新規要求不可、椅子は未完了ライドがあると受理不可",
+      "source": "app.md ライド",
+      "endpoints": ["POST /api/app/rides", "GET /api/internal/matching"],
+      "tables": ["rides", "ride_statuses"]
+    },
+    {
+      "text": "未使用クーポンは付与順に必ず使う（新規登録クーポンが招待クーポンより優先）。割引は固定料金500円を除いた分",
+      "source": "app.md クーポン",
+      "endpoints": ["POST /api/app/rides", "POST /api/app/rides/estimated-fare", "POST /api/app/users"],
+      "tables": ["coupons"]
+    },
+    {
+      "text": "/api/initializeは30秒以内、language=goを返し、payment_serverを保存。データ構造を変えたらinitializeも追従",
+      "source": "day.md 負荷走行 / データベースのデータの初期化 / 言語賞",
+      "endpoints": ["POST /api/initialize"],
+      "tables": ["settings"]
+    },
+    {
+      "text": "notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒",
+      "source": "day.md ベンチマーカーのタイムアウト / 負荷走行",
+      "endpoints": ["GET /api/app/notification", "GET /api/chair/notification", "POST /api/app/users", "POST /api/owner/owners", "POST /api/chair/chairs"]
+    },
+    {
+      "text": "/api/internal/matchingとisuride-matcherは仕様・間隔を自由に変えてよい（ISUCON_MATCHING_INTERVALはenv.sh）",
+      "source": "app.md ライドのマッチング",
+      "endpoints": ["GET /api/internal/matching"],
+      "tables": ["rides", "chairs"]
+    },
+    {
+      "text": "スコア = マッチ位置→乗車位置の距離×0.1 + 乗車位置→目的地の距離 + 完了ライド数×5",
+      "source": "day.md スコアの計算",
+      "endpoints": ["POST /api/app/rides/:id/evaluation", "POST /api/chair/coordinate"],
+      "tables": ["rides", "ride_statuses", "chair_locations"]
+    },
+    {
+      "text": "追試: 再起動後もベンチで書いたデータが読めること。envcheck・isuadminに触らない",
+      "source": "day.md 追試 / 変更してはいけない点",
+      "endpoints": [],
+      "tables": []
+    }
+  ]
+}

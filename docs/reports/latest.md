@@ -7,6 +7,27 @@
 
 > The benchmarker calls the API directly. Request counts here reflect the browser UI; use the access log for bench behaviour.
 
+<!-- bench:start -->
+## Now — what to solve next (bench run 20261029-133401; refreshed 2026-10-29T13:36:15.231Z)
+
+Next step (report rules):
+1. 構成変更: 空いている host に処理を移す — `TECHNIQUES T26（app 2 台 + host 固定の endpoint は nginx で寄せる）/ T27（付随サービス）`
+2. parallel-fix を続ける — `task actions:plan TS=20261029-133401 → parallel-fix skill`
+3. deep-dive — `task deepdive TS=20261029-133401 → deep-dive skill`
+
+| # | what | pts | share | p99 ms | score | fix | to do | rules |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `GET /api/chair/notification` | 62 | 42% | 353 |  | parallel-fix file:chair_handlers.go | この endpoint の処理を軽くする（chair_handlers.go）; ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/chair/notification | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
+| 2 | `GET /api/app/notification` | 56 | 23% | 573 | loop | design (assign an owner) | ポーリングを軽くする（応答のキャッシュ / 304 / 間隔の指定）: GET /api/app/notification | 通知は全状態遷移を発生順にat least once返す。飛ばす・逆転はクリティカルでFAIL; 通知は状態変化から3秒以内。マッチ後の通知は30秒の猶予; SSEにするならContent-Type text/event-stream、接続直後に最新のライド状態を送る; notificationは60秒、initializeは30秒、他は10秒でタイムアウト。登録APIは処理全体20秒 |
+| 3 | `P1` | 30 |  |  |  | parallel-fix file:owner_handlers.go | 重い集計 SQL を減らす（1 回にまとめる / 結果をキャッシュ / 集計列）: SELECT id, owner_id, name, access_token, model, is_active, created_at… |  |
+| 4 | `P1` | 30 |  |  |  | parallel-fix indexes | index を追加: ride_statuses(ride_id, created_at) |  |
+| 5 | `P1` | 30 |  |  |  | parallel-fix indexes | index を追加: ride_statuses(ride_id, chair_sent_at, created_at) |  |
+| 6 | `P1` | 30 |  |  |  | parallel-fix indexes | index を追加: chair_locations(chair_id, created_at) |  |
+| 7 | `P1` | 30 |  |  |  | parallel-fix indexes | index を追加: rides(chair_id, created_at) |  |
+
+(+6 more open items)
+<!-- bench:end -->
+
 ## System (from the repo mirror of /home/isucon: etc/, env.sh, server-info)
 
 | unit | ExecStart | WorkingDirectory | depends on |

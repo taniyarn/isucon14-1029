@@ -10,6 +10,10 @@ fi
 if test -f /home/isucon/env.sh; then
 	. /home/isucon/env.sh
 fi
+# DB on svc3: env.sh says 127.0.0.1 and would override the value inherited from systemd; env.db.sh wins (same as the app)
+if test -f /home/isucon/env.db.sh; then
+	. /home/isucon/env.db.sh
+fi
 
 ISUCON_DB_HOST=${ISUCON_DB_HOST:-127.0.0.1}
 ISUCON_DB_PORT=${ISUCON_DB_PORT:-3306}

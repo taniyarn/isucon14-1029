@@ -1,0 +1,4 @@
+# installed on the DB host (svc3) by deploy.sh section 0: app hosts svc1/svc2 connect over the private network.
+# Grants for 'isucon'@'%' come from webapp/sql/zz-grant-remote.sql (applied by deploy.sh after the restart).
+[mysqld]
+bind-address = 0.0.0.0

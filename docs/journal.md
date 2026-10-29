@@ -12,3 +12,4 @@
 22:40 | docs/config-options / #10 | [fast] docs: 構成の案 3 つ（config-options、20261029-133401） | — | merge c6f8ff1、OK: fast（事後レビュー）
 22:43 | docs-app-next / #12 | [fast] docs: app-next | — | merge f2730c3、OK: fast（事後レビュー）
 22:45 | docs/infra-tuning / #13 | [fast] docs: etc/ だけで済むチューニング候補（infra-tuning.md） | — | merge a49251b、OK: fast（事後レビュー）
+22:45 | scan/133401 / #14 | [fast] docs: technique-scan 20261029-133401 (early-scan included) | — | merge adb083c、OK: fast（事後レビュー）

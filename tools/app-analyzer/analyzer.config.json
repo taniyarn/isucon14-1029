@@ -37,7 +37,12 @@
     {
       "name": "guest",
       "seeds": [
-        "/"
+        "/",
+        "/client/login",
+        "/client/register",
+        "/owner/login",
+        "/owner/register",
+        "/simulator"
       ]
     },
     {
@@ -53,14 +58,28 @@
         }
       ],
       "seeds": [
-        "/"
+        "/client",
+        "/client/history",
+        "/client/user",
+        "/client/register-payment"
       ],
       "authCheck": {
         "method": "GET",
         "path": "/api/app/rides",
         "expectStatus": 200
       },
-      "//source": "app.md 利用者一覧 Miller6106"
+      "//source": "app.md 利用者一覧 Miller6106",
+      "flows": [
+        {
+          "name": "ride-lifecycle",
+          "script": "flows/isuride-ride-lifecycle.mjs",
+          "dwellMs": 1500
+        }
+      ],
+      "vars": {
+        "chairToken": "3013d5ec84e1b230f913a17d71ef27c8d09d777b1cce7a3c1e2ffd4040848411",
+        "paymentToken": "tok_isucon_analyzer"
+      }
     },
     {
       "name": "owner",
@@ -71,7 +90,8 @@
         }
       ],
       "seeds": [
-        "/"
+        "/owner",
+        "/owner/sales"
       ],
       "authCheck": {
         "method": "GET",
@@ -89,7 +109,7 @@
         }
       ],
       "seeds": [
-        "/"
+        "/simulator"
       ],
       "authCheck": {
         "method": "GET",

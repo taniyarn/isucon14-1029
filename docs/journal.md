@@ -20,3 +20,6 @@
 22:50 | docs-chair-distance / #18 | [fast] docs: design chair-distance (T7) | — | merge 31406cb、OK: fast（事後レビュー）
 23:01 | 人の判断 | t25 T7 chair_distances の設計（#18）OK（盤）/ t24 #16 #15 #17 OK（盤）
 23:02 | bench 3 20261029-134923 | main 2c9736a（#8 #11） | score 9225（8071 → +14%） | CPU is not the limit (idle 63%)
+22:52 | integ/20261029-134509 #? / #16 | coupons を主キーで引く + getChairStats の ORDER BY を外す | report 20261029-134509 coupons used_by 10%・getChairStats 4% | merge 42d53f9、OK: 盤 22:51
+22:52 | early/matching / PR #? / #15 | matching を待ち全件×空き椅子の到着順に + matcher 100 ms・app 直叩き | bench.log 不満100%がマッチ待ち、matcher 実測 1,182 ms（summary 133401） | merge 2ba6f9c、OK: 盤 22:51
+22:52 | early/payment-idem / PR #? / #17 | 決済に Idempotency-Key（ride id）+ WithoutCancel、失敗時は再送 | 守り: 切断で決済済み+ロールバック → 次回の二重請求（クリティカル）の芽 | merge 5cef54c、OK: 盤 22:51

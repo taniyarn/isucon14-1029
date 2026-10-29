@@ -1,0 +1,10 @@
+# DB host performance defaults (deploy.sh installs this as /etc/mysql/mysql.conf.d/zz-perf.cnf on the DB host).
+# ISUCON13 practice: /initialize went from 16.3 s to 3.4 s with these two lines alone.
+# flush_log_at_trx_commit=2 loses up to ~1 s of commits on an OS crash/power loss; a clean reboot (the re-test) is safe.
+[mysqld]
+innodb_flush_log_at_trx_commit = 2
+sync_binlog = 0
+skip-log-bin
+# size to ~60% of RAM on a dedicated DB host (c5.large 4 GB -> 2G); leave default while the DB shares a host with the app
+# innodb_buffer_pool_size = 2G
+max_connections = 1024

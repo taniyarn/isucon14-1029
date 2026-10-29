@@ -37,3 +37,5 @@
 644 root root /etc/sysctl.d/10-network-security.conf
 644 root root /etc/sysctl.d/10-ipv6-privacy.conf
 644 root root /etc/sysctl.d/README.sysctl
+644 root root /etc/systemd/system/isuride-go.service.d/restart.conf
+644 root root /etc/mysql/mysql.conf.d/zz-perf.cnf

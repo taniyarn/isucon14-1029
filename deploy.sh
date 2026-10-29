@@ -46,8 +46,12 @@ fi
 # matcher: with one shared DB, exactly ONE matcher may run (3 matchers = concurrent assignment of the same rides).
 # svc1 only; enable/disable persist across reboots.
 MATCHER_HOST="ip-172-31-13-138"
+# interval 100 ms + app on 127.0.0.1:8080 (etc/systemd/system/isuride-matcher.service.d/interval.conf; the manual lets us change both)
+if [ -f etc/systemd/system/isuride-matcher.service.d/interval.conf ]; then
+  etc_install etc/systemd/system/isuride-matcher.service.d/interval.conf && sudo systemctl daemon-reload
+fi
 if [ "$HOST" = "$MATCHER_HOST" ]; then
-  sudo systemctl enable --now isuride-matcher.service
+  sudo systemctl enable isuride-matcher.service && sudo systemctl restart isuride-matcher.service
 else
   sudo systemctl disable --now isuride-matcher.service 2>/dev/null || true
 fi

@@ -29,3 +29,4 @@
 22:58 | revert-19 / #21 | [fast] revert #19 (smoke: /api/initialize 500) | — | merge 44ee5fb、OK: fast（事後レビュー）
 23:18 | 人の判断 | t31 特別賞はベンチ 5 の後に計測 OFF（#2 → 1 ベンチ → #3）（盤）/ #19 は smoke で initialize 500 → #21 で revert（ec64bd8）
 23:00 | docs-ride-status / #23 | [fast] docs: design ride status column | — | merge bd8fc56、OK: fast（事後レビュー）
+23:24 | bench 5 20261029-135903 | main ec64bd8（#19 の revert #21） | score 29637 pass=true（28768 → +3%） | 新しい 5xx: POST /api/app/users deadlock ×3 / 人の判断 t33 #22 OK・t34 rides.status 設計 OK（盤）/ effect: #15 matching 効いた（マッチ待ち不満 100%→48%、完了 96→382）、#17 問題なし

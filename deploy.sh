@@ -62,6 +62,11 @@ for u in isuride-node.service isuride-perl.service isuride-php.service isuride-p
   sudo systemctl disable --now "$u" 2>/dev/null || true
 done
 
+# ---- 2d. measurement switch (score-sprint / final bench): 1 = off, 0 = on, empty = leave the hosts as they are.
+# Runs tools/bootstrap/measure-off.sh on every deploy, so a deploy never turns the access log back on behind you.
+MEASURE_OFF=1
+case "$MEASURE_OFF" in 1) sudo bash tools/bootstrap/measure-off.sh off ;; 0) sudo bash tools/bootstrap/measure-off.sh on ;; esac
+
 # ---- 3. restart ----
 sudo systemctl restart isuride-go.service
 sleep 1; systemctl is-active isuride-go.service >/dev/null && echo "== isuride-go.service active on $HOST" || { echo "!! isuride-go.service failed on $HOST"; sudo journalctl -u isuride-go.service -n 30 --no-pager; exit 1; }

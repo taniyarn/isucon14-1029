@@ -27,6 +27,7 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		setUidHeader(w, user.ID) // measurement:
 		ctx = context.WithValue(ctx, "user", user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -51,6 +52,7 @@ func ownerAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		setUidHeader(w, owner.ID) // measurement:
 		ctx = context.WithValue(ctx, "owner", owner)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -76,6 +78,7 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		setUidHeader(w, chair.ID) // measurement:
 		ctx = context.WithValue(ctx, "chair", chair)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

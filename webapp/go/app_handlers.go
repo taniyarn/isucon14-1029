@@ -763,52 +763,55 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNotificationResponseChairStats, error) {
 	stats := appGetNotificationResponseChairStats{}
 
-	rides := []Ride{}
+	// one query instead of ride_statuses per ride: rides that have CARRYING, ARRIVED and COMPLETED
+	rows := []struct {
+		RideID     string `db:"ride_id"`
+		Evaluation *int   `db:"evaluation"`
+		Status     string `db:"status"`
+	}{}
 	err := tx.SelectContext(
 		ctx,
-		&rides,
-		`SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC`,
+		&rows,
+		`SELECT r.id AS ride_id, r.evaluation, rs.status FROM rides r JOIN ride_statuses rs ON rs.ride_id = r.id WHERE r.chair_id = ? AND rs.status IN ('CARRYING', 'ARRIVED', 'COMPLETED') ORDER BY r.updated_at DESC, r.id, rs.created_at`,
 		chairID,
 	)
 	if err != nil {
 		return stats, err
 	}
 
+	type rideFlags struct {
+		evaluation                   *int
+		arrived, pickuped, completed bool
+	}
+	flags := map[string]*rideFlags{}
+	order := []string{}
+	for _, row := range rows {
+		f, ok := flags[row.RideID]
+		if !ok {
+			f = &rideFlags{evaluation: row.Evaluation}
+			flags[row.RideID] = f
+			order = append(order, row.RideID)
+		}
+		switch row.Status {
+		case "ARRIVED":
+			f.arrived = true
+		case "CARRYING":
+			f.pickuped = true
+		case "COMPLETED":
+			f.completed = true
+		}
+	}
+
 	totalRideCount := 0
 	totalEvaluation := 0.0
-	for _, ride := range rides {
-		rideStatuses := []RideStatus{}
-		err = tx.SelectContext(
-			ctx,
-			&rideStatuses,
-			`SELECT * FROM ride_statuses WHERE ride_id = ? ORDER BY created_at`,
-			ride.ID,
-		)
-		if err != nil {
-			return stats, err
-		}
-
-		var arrivedAt, pickupedAt *time.Time
-		var isCompleted bool
-		for _, status := range rideStatuses {
-			if status.Status == "ARRIVED" {
-				arrivedAt = &status.CreatedAt
-			} else if status.Status == "CARRYING" {
-				pickupedAt = &status.CreatedAt
-			}
-			if status.Status == "COMPLETED" {
-				isCompleted = true
-			}
-		}
-		if arrivedAt == nil || pickupedAt == nil {
-			continue
-		}
-		if !isCompleted {
+	for _, id := range order {
+		f := flags[id]
+		if !f.arrived || !f.pickuped || !f.completed {
 			continue
 		}
 
 		totalRideCount++
-		totalEvaluation += float64(*ride.Evaluation)
+		totalEvaluation += float64(*f.evaluation)
 	}
 
 	stats.TotalRidesCount = totalRideCount
@@ -871,11 +874,16 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// active chairs without an unfinished ride (COMPLETED is the terminal status, so
+	// "latest status != COMPLETED" == "no COMPLETED status"), in one query instead of rides × statuses per chair
 	chairs := []Chair{}
 	err = tx.SelectContext(
 		ctx,
 		&chairs,
-		`SELECT * FROM chairs`,
+		`SELECT * FROM chairs c WHERE c.is_active = TRUE AND NOT EXISTS (
+		   SELECT 1 FROM rides r WHERE r.chair_id = c.id
+		   AND NOT EXISTS (SELECT 1 FROM ride_statuses rs WHERE rs.ride_id = r.id AND rs.status = 'COMPLETED')
+		 ) ORDER BY c.id`,
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -884,32 +892,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
 	for _, chair := range chairs {
-		if !chair.IsActive {
-			continue
-		}
-
-		rides := []*Ride{}
-		if err := tx.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id = ? ORDER BY created_at DESC`, chair.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		skip := false
-		for _, ride := range rides {
-			// 過去にライドが存在し、かつ、それが完了していない場合はスキップ
-			status, err := getLatestRideStatus(ctx, tx, ride.ID)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
-			if status != "COMPLETED" {
-				skip = true
-				break
-			}
-		}
-		if skip {
-			continue
-		}
 
 		// 最新の位置情報を取得
 		chairLocation := &ChairLocation{}

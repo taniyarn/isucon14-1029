@@ -42,3 +42,4 @@
 644 root root /etc/systemd/system/isuride-go.service
 644 root root /etc/mysql/mysql.conf.d/zz-remote.cnf
 644 root root /etc/systemd/system/isuride-go.service.d/db.conf
+644 root root /etc/systemd/system/isuride-matcher.service.d/interval.conf

@@ -1,52 +1,75 @@
 package main
 
 import (
-	"database/sql"
-	"errors"
 	"net/http"
 )
 
+// matchingCandidate is a free chair with its latest position and model speed.
+type matchingCandidate struct {
+	ID        string `db:"id"`
+	Latitude  int    `db:"latitude"`
+	Longitude int    `db:"longitude"`
+	Speed     int    `db:"speed"`
+}
+
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
+// 1 回の呼び出しで、待っているライド全件を、空いている椅子の中から「乗車位置までの到着が早い順」
+// (マンハッタン距離 ÷ モデルの速度) に古いライドから割り当てる。
 func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	// MEMO: 一旦最も待たせているリクエストに適当な空いている椅子マッチさせる実装とする。おそらくもっといい方法があるはず…
-	ride := &Ride{}
-	if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id IS NULL ORDER BY created_at LIMIT 1`); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+
+	rides := []Ride{}
+	if err := db.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id IS NULL ORDER BY created_at`); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-
-	matched := &Chair{}
-	empty := false
-	for i := 0; i < 10; i++ {
-		if err := db.GetContext(ctx, matched, "SELECT * FROM chairs INNER JOIN (SELECT id FROM chairs WHERE is_active = TRUE ORDER BY RAND() LIMIT 1) AS tmp ON chairs.id = tmp.id LIMIT 1"); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-		}
-
-		if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", matched.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		if empty {
-			break
-		}
-	}
-	if !empty {
+	if len(rides) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
+	// free = active, and every ride ever assigned to the chair has had its COMPLETED status sent to the chair
+	// (same as the reference's COUNT(chair_sent_at) = 6: statuses are inserted and sent in order).
+	// Chairs without any location are not candidates (the reference's nearby-chairs skips them too).
+	candidates := []matchingCandidate{}
+	if err := db.SelectContext(ctx, &candidates, `
+SELECT c.id, cl.latitude, cl.longitude, cm.speed
+FROM chairs c
+JOIN chair_models cm ON cm.name = c.model
+JOIN chair_locations cl ON cl.id = (SELECT id FROM chair_locations WHERE chair_id = c.id ORDER BY created_at DESC LIMIT 1)
+WHERE c.is_active = TRUE
+  AND NOT EXISTS (
+    SELECT 1 FROM rides r
+    WHERE r.chair_id = c.id
+      AND NOT EXISTS (
+        SELECT 1 FROM ride_statuses rs
+        WHERE rs.ride_id = r.id AND rs.status = 'COMPLETED' AND rs.chair_sent_at IS NOT NULL
+      )
+  )`); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	for _, ride := range rides {
+		if len(candidates) == 0 {
+			break
+		}
+		best, bestCost := -1, 0.0
+		for i, c := range candidates {
+			speed := c.Speed
+			if speed <= 0 {
+				speed = 1
+			}
+			cost := float64(calculateDistance(c.Latitude, c.Longitude, ride.PickupLatitude, ride.PickupLongitude)) / float64(speed)
+			if best < 0 || cost < bestCost {
+				best, bestCost = i, cost
+			}
+		}
+		if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ? AND chair_id IS NULL", candidates[best].ID, ride.ID); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		candidates = append(candidates[:best], candidates[best+1:]...)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

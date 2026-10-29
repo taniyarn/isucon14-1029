@@ -685,7 +685,7 @@ tasks:
     preconditions:
       - sh: 'echo "{{.SQL64}}" | base64 --decode | tr "\n" " " | grep -qiE "^\s*(select|show|explain|describe|desc)\b"'
         msg: "db:query is read-only: SQL must start with SELECT / SHOW / EXPLAIN / DESCRIBE"
-      - sh: '! echo "{{.SQL64}}" | base64 --decode | tr "\n" " " | grep -qE ";\s*[^[:space:]]"'
+      - sh: 'echo "{{.SQL64}}" | base64 --decode | tr "\n" " " | grep -qvE ";[[:space:]]*[^[:space:]]"'
         msg: "db:query runs one statement (no ; between statements)"
     cmds:
       - |

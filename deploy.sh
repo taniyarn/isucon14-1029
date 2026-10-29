@@ -64,7 +64,7 @@ done
 
 # ---- 2d. measurement switch (score-sprint / final bench): 1 = off, 0 = on, empty = leave the hosts as they are.
 # Runs tools/bootstrap/measure-off.sh on every deploy, so a deploy never turns the access log back on behind you.
-MEASURE_OFF=1
+MEASURE_OFF=0
 case "$MEASURE_OFF" in 1) sudo bash tools/bootstrap/measure-off.sh off ;; 0) sudo bash tools/bootstrap/measure-off.sh on ;; esac
 
 # ---- 3. restart ----

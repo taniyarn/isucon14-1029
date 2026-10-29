@@ -876,8 +876,8 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	// active chairs without an unfinished ride (COMPLETED is the terminal status, so
 	// "latest status != COMPLETED" == "no COMPLETED status"), in one query instead of rides × statuses per chair
-	// latest location joined in the same query (was one chair_locations query per chair);
-	// chairs without a location are dropped by the inner join, as the old ErrNoRows `continue` did
+	// latest location from chair_distances (kept by chairPostCoordinate; was one chair_locations query per chair);
+	// chairs without a location have no chair_distances row and are dropped by the inner join, as the old ErrNoRows `continue` did
 	chairs := []struct {
 		ID        string `db:"id"`
 		Name      string `db:"name"`
@@ -888,8 +888,8 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 	err = tx.SelectContext(
 		ctx,
 		&chairs,
-		`SELECT c.id, c.name, c.model, cl.latitude, cl.longitude FROM chairs c
-		 JOIN chair_locations cl ON cl.id = (SELECT id FROM chair_locations WHERE chair_id = c.id ORDER BY created_at DESC LIMIT 1)
+		`SELECT c.id, c.name, c.model, cd.last_latitude AS latitude, cd.last_longitude AS longitude FROM chairs c
+		 JOIN chair_distances cd ON cd.chair_id = c.id
 		 WHERE c.is_active = TRUE AND NOT EXISTS (
 		   SELECT 1 FROM rides r WHERE r.chair_id = c.id
 		   AND NOT EXISTS (SELECT 1 FROM ride_statuses rs WHERE rs.ride_id = r.id AND rs.status = 'COMPLETED')

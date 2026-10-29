@@ -31,12 +31,14 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	// free = active, and every ride ever assigned to the chair has had its COMPLETED status sent to the chair
 	// (same as the reference's COUNT(chair_sent_at) = 6: statuses are inserted and sent in order).
 	// Chairs without any location are not candidates (the reference's nearby-chairs skips them too).
+	// Latest position: chair_distances.last_* (one row per chair, maintained by chairPostCoordinate, rebuilt on /initialize)
+	// instead of the per-chair ORDER BY created_at DESC LIMIT 1 over chair_locations (151 ms/call in run 135253).
 	candidates := []matchingCandidate{}
 	if err := db.SelectContext(ctx, &candidates, `
-SELECT c.id, cl.latitude, cl.longitude, cm.speed
+SELECT c.id, cd.last_latitude AS latitude, cd.last_longitude AS longitude, cm.speed
 FROM chairs c
 JOIN chair_models cm ON cm.name = c.model
-JOIN chair_locations cl ON cl.id = (SELECT id FROM chair_locations WHERE chair_id = c.id ORDER BY created_at DESC LIMIT 1)
+JOIN chair_distances cd ON cd.chair_id = c.id
 WHERE c.is_active = TRUE
   AND NOT EXISTS (
     SELECT 1 FROM rides r

@@ -772,7 +772,7 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	err := tx.SelectContext(
 		ctx,
 		&rows,
-		`SELECT r.id AS ride_id, r.evaluation, rs.status FROM rides r JOIN ride_statuses rs ON rs.ride_id = r.id WHERE r.chair_id = ? AND rs.status IN ('CARRYING', 'ARRIVED', 'COMPLETED') ORDER BY r.updated_at DESC, r.id, rs.created_at`,
+		`SELECT r.id AS ride_id, r.evaluation, rs.status FROM rides r JOIN ride_statuses rs ON rs.ride_id = r.id WHERE r.chair_id = ? AND rs.status IN ('CARRYING', 'ARRIVED', 'COMPLETED')`,
 		chairID,
 	)
 	if err != nil {
@@ -947,7 +947,7 @@ func calculateDiscountedFare(ctx context.Context, tx *sqlx.Tx, userID string, ri
 		pickupLongitude = ride.PickupLongitude
 
 		// すでにクーポンが紐づいているならそれの割引額を参照
-		if err := tx.GetContext(ctx, &coupon, "SELECT * FROM coupons WHERE used_by = ?", ride.ID); err != nil {
+		if err := tx.GetContext(ctx, &coupon, "SELECT * FROM coupons WHERE user_id = ? AND used_by = ?", ride.UserID, ride.ID); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				return 0, err
 			}

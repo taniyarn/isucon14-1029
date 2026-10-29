@@ -8,3 +8,5 @@ skip-log-bin
 # size to ~60% of RAM on a dedicated DB host (c5.large 4 GB -> 2G); leave default while the DB shares a host with the app
 # innodb_buffer_pool_size = 2G
 max_connections = 1024
+# 10.7 threads created/s with thread_cache_size=9 (report 20261029-133401 Tuning): keep threads for reuse
+thread_cache_size = 256

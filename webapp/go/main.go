@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,7 +23,8 @@ var db *sqlx.DB
 func main() {
 	mux := setup()
 	slog.Info("Listening on :8080")
-	http.ListenAndServe(":8080", mux)
+	go startMeasure()                                 // measurement:
+	http.ListenAndServe(":8080", measureHandler(mux)) // measurement: sqltag request tags
 }
 
 func setup() http.Handler {
@@ -58,15 +60,29 @@ func setup() http.Handler {
 	dbConfig.Net = "tcp"
 	dbConfig.DBName = dbname
 	dbConfig.ParseTime = true
+	dbConfig.InterpolateParams = true
 
-	_db, err := sqlx.Connect("mysql", dbConfig.FormatDSN())
+	_db, err := sqlx.Open(dbDriverName, dbConfig.FormatDSN()) // measurement: driver name
 	if err != nil {
 		panic(err)
 	}
+	// The DB may come up after the app (separate host / crash recovery): retry for up to 60 s.
+	for i := 0; ; i++ {
+		if err = _db.Ping(); err == nil {
+			break
+		}
+		if i >= 60 {
+			panic(err)
+		}
+		slog.Info("waiting for DB", "err", err)
+		time.Sleep(time.Second)
+	}
+	_db.SetMaxOpenConns(64)
+	_db.SetMaxIdleConns(64)
+	_db.SetConnMaxLifetime(60 * time.Second)
 	db = _db
 
 	mux := chi.NewRouter()
-	mux.Use(middleware.Logger)
 	mux.Use(middleware.Recoverer)
 	mux.HandleFunc("POST /api/initialize", postInitialize)
 
@@ -172,7 +188,7 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	}
 	w.Write(buf)
 
-	slog.Error("error response wrote", err)
+	slog.Error("error response wrote", "err", err)
 }
 
 func secureRandomStr(b int) string {

@@ -21,8 +21,18 @@ etc_install() {
 tcp_ok() { timeout 3 bash -c "</dev/tcp/$1/$2" 2>/dev/null; }
 
 # ---- 0. DB host (fill when the DB moves to svc3; empty = single host). Set by parallel-setup A. ----
-DB_HOST=""                # hostname of the DB host, e.g. ip-172-31-0-233
-DB_PRIVATE_IP=""          # what app hosts dial, e.g. 172.31.0.233
+DB_HOST="ip-172-31-6-139"         # hostname of the DB host (svc3)
+DB_PRIVATE_IP="172.31.6.139"      # what app hosts dial
+# per-host DB override: env.db.<hostname>.sh -> /home/isucon/env.db.sh (svc1/svc2 = 172.31.6.139, svc3 = 127.0.0.1),
+# loaded after env.sh by the db.conf drop-in (app) and by webapp/sql/init.sh + indexes/apply.sh (/initialize, deploy).
+if [ -f "env.db.$HOST.sh" ]; then
+  cp "env.db.$HOST.sh" /home/isucon/env.db.sh
+else
+  rm -f /home/isucon/env.db.sh   # unknown host: fall back to env.sh (local DB)
+fi
+if [ -f etc/systemd/system/isuride-go.service.d/db.conf ]; then
+  etc_install etc/systemd/system/isuride-go.service.d/db.conf && sudo systemctl daemon-reload
+fi
 if [ -n "$DB_HOST" ] && [ "$HOST" = "$DB_HOST" ]; then
   # remote access: bind-address + grants (the AMI only has isucon@localhost; other hosts get Error 1130 without this)
   [ -f etc/mysql/mysql.conf.d/zz-remote.cnf ] && ! cmp -s etc/mysql/mysql.conf.d/zz-remote.cnf /etc/mysql/mysql.conf.d/zz-remote.cnf && { etc_install etc/mysql/mysql.conf.d/zz-remote.cnf; sudo systemctl restart mysql; }
@@ -32,6 +42,14 @@ if [ -n "$DB_HOST" ] && [ "$HOST" = "$DB_HOST" ]; then
 fi
 if [ -n "$DB_PRIVATE_IP" ] && [ "$HOST" != "$DB_HOST" ]; then
   tcp_ok "$DB_PRIVATE_IP" 3306 || { echo "!! DB $DB_PRIVATE_IP:3306 unreachable from $HOST (deploy the DB host first: task deploy does; else SG / bind-address)"; exit 1; }
+fi
+# matcher: with one shared DB, exactly ONE matcher may run (3 matchers = concurrent assignment of the same rides).
+# svc1 only; enable/disable persist across reboots.
+MATCHER_HOST="ip-172-31-13-138"
+if [ "$HOST" = "$MATCHER_HOST" ]; then
+  sudo systemctl enable --now isuride-matcher.service
+else
+  sudo systemctl disable --now isuride-matcher.service 2>/dev/null || true
 fi
 # per-host DB settings are NOT written into env.sh (some contests regenerate it at boot): keep them in env.db.sh and
 # load it as a second EnvironmentFile via a systemd drop-in (etc/systemd/system/<unit>.d/db.conf); init.sh must source it too.

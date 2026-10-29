@@ -4,6 +4,8 @@
 #   alp:        alp ltsv --config alp.yml -r --sort sum --file access.log
 #   isumeasure: report / export / the ops panel read this file from the repo root (alp ignores `names`).
 matching_groups:
+  - "^/assets/[^/]+$"   # static (report 20261029-134509 Unmatched paths)
+  - "^/images/[^/]+$"   # static
   - "^/api/app/rides/estimated-fare$"   # POST
   - "^/api/app/nearby-chairs$"   # GET
   - "^/api/app/notification$"   # GET

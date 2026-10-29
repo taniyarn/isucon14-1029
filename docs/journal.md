@@ -10,3 +10,4 @@
 22:40 | integ/early / PR #? / #6 | early-indexes 6本 + getChairStats / appGetNearbyChairs のN+1を1クエリに | コードのfile:line（baseline前、ルール1の例外） | merge 4f1ee9a、OK: 盤 22:39
 22:40 | fix/20261029-133401/ops / #9 | [fast] mysql: thread_cache_size 256（ops グループ、20261029-133401） | — | merge 7dc280a、OK: fast（事後レビュー）
 22:40 | docs/config-options / #10 | [fast] docs: 構成の案 3 つ（config-options、20261029-133401） | — | merge c6f8ff1、OK: fast（事後レビュー）
+22:43 | docs-app-next / #12 | [fast] docs: app-next | — | merge f2730c3、OK: fast（事後レビュー）

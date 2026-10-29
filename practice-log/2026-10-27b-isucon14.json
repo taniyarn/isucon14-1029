@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "date": "2026-10-27b",
+    "slug": "isucon14",
+    "contest_repo": "isucon14-1027",
+    "problem": "ISUCON14",
+    "prize_target": 32767,
+    "kit_commit": "84033e7",
+    "kit_head": null,
+    "models": {
+      "1": {
+        "model": "Opus 5.5",
+        "fast": true
+      },
+      "2": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "3": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "c": {
+        "model": "Fable 5.1",
+        "fast": false
+      }
+    },
+    "model_config": "1 Opus 5.5+fast / 2 3 Opus 5.5 / c Fable 5.1",
+    "bench_machine": null,
+    "hosts": 3,
+    "url_at": "2026-10-27T20:41:09",
+    "notes": {
+      "changed": "ベンチ前提を盤の入力で、まとめてレビュー、ベンチ終わったボタン、並列 deploy、journal/claims 自動、モデル指定（c=Fable）",
+      "hypothesis": "止まり（前提の取り違え・ship 停止・PR ごとの OK）を消せば URL→特別賞が半分になる",
+      "observations": "21 分。ベンチ 3 で越えた手は baseline 前に作れた。レーン 2 が 44% 待ち"
+    }
+  },
+  "north_star": 21.3,
+  "speed": {
+    "url_to_baseline_ready_min": 3.5,
+    "benches_to_prize": 3,
+    "loop_median_min": 5.8,
+    "ship_median_s": 18,
+    "ship_max_s": 70,
+    "deploy_median_s": 18
+  },
+  "outcome": {
+    "score_at_60min_ratio": 2.288,
+    "best_ratio": 2.288,
+    "best_score": 74987,
+    "runs": 8,
+    "fails": 0,
+    "new_5xx_alerts": 1,
+    "reverts": 0,
+    "reboot_test": "not_run"
+  },
+  "agents": {
+    "1": {
+      "model": "Opus 5.5",
+      "cost_usd": 24.31,
+      "turns": 54,
+      "turn_median_s": 19,
+      "busy_min": 23.1,
+      "idle_min_before_prize": 8.8,
+      "idle_breakdown": {
+        "human": 2.7,
+        "other_lane": 1.8,
+        "nothing": 0.0,
+        "subagent": 2.9,
+        "unmarked": 1.3
+      },
+      "merged_prs": 0,
+      "alerts_raised": 3,
+      "permission_wait_s": 0
+    },
+    "2": {
+      "model": "Opus 5.5",
+      "cost_usd": 12.13,
+      "turns": 22,
+      "turn_median_s": 37,
+      "busy_min": 18.1,
+      "idle_min_before_prize": 7.6,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 0.9,
+        "nothing": 5.4,
+        "subagent": 1.3,
+        "unmarked": 0.0
+      },
+      "merged_prs": 7,
+      "alerts_raised": 1,
+      "permission_wait_s": 0
+    },
+    "3": {
+      "model": "Opus 5.5",
+      "cost_usd": 19.66,
+      "turns": 14,
+      "turn_median_s": 24,
+      "busy_min": 13.9,
+      "idle_min_before_prize": 11.1,
+      "idle_breakdown": {
+        "human": 1.8,
+        "other_lane": 4.5,
+        "nothing": 0.0,
+        "subagent": 4.8,
+        "unmarked": 0.0
+      },
+      "merged_prs": 7,
+      "alerts_raised": 0,
+      "permission_wait_s": 75
+    },
+    "c": {
+      "model": "Fable 5.1",
+      "cost_usd": 30.17,
+      "turns": 8,
+      "turn_median_s": 97,
+      "busy_min": 11.7,
+      "idle_min_before_prize": 3.9,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 0.9,
+        "nothing": 3.1,
+        "subagent": 0.0,
+        "unmarked": 0.0
+      },
+      "merged_prs": 11,
+      "alerts_raised": 4,
+      "permission_wait_s": 0
+    }
+  },
+  "agents_total": {
+    "cost_usd": 86.27,
+    "cost_to_prize_usd": 39.09,
+    "merged_prs": 27,
+    "merged_unattributed": 2,
+    "merged_per_usd": 0.31
+  },
+  "human": {
+    "todos": 38,
+    "response_median_s": {
+      "bench": 119,
+      "input": 356,
+      "otel": 126,
+      "other": 48,
+      "question": 72,
+      "review": 25,
+      "start": 66,
+      "url": 374
+    },
+    "total_wait_min": 30.4,
+    "wait_before_prize_min": 11.2,
+    "decisions": {
+      "choices": 7,
+      "picks": 0,
+      "pr_reviews": 11
+    }
+  },
+  "safety": {
+    "crit_alerts": 0,
+    "review_catches": 1,
+    "dq_risks_found": null
+  },
+  "pr_lanes": {
+    "1": "?",
+    "2": "3",
+    "3": "2",
+    "4": "2",
+    "5": "c",
+    "6": "2",
+    "7": "c",
+    "8": "3",
+    "9": "c",
+    "10": "?",
+    "11": "2",
+    "13": "3",
+    "14": "c",
+    "15": "c",
+    "16": "2",
+    "17": "3",
+    "18": "c",
+    "19": "2",
+    "20": "2",
+    "21": "3",
+    "22": "c",
+    "23": "c",
+    "24": "c",
+    "25": "3",
+    "26": "3",
+    "27": "c",
+    "28": "c"
+  }
+}

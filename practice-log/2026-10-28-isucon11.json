@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "date": "2026-10-28",
+    "slug": "isucon11",
+    "contest_repo": "isucon11-1028",
+    "problem": "ISUCON11",
+    "prize_target": null,
+    "kit_commit": "13a2b73",
+    "kit_head": "adb2df8",
+    "models": {
+      "1": {
+        "model": "Opus 5.5",
+        "fast": true
+      },
+      "2": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "3": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "c": {
+        "model": "Fable 5.1",
+        "fast": false
+      }
+    },
+    "model_config": "1 Opus 5.5+fast / 2 3 Opus 5.5 / c Fable 5.1",
+    "bench_machine": null,
+    "hosts": 3,
+    "url_at": "2026-10-28T23:30:01",
+    "notes": {
+      "changed": "hosts:setup 後に盤が baseline を自動 ready（#39）、呼び出しを減らす（hooks で盤の状態、pr:submit、hub:log、lane:todo WAIT）",
+      "hypothesis": "baseline の ready が 1〜2 分になり、ベンチ 2 までが短くなる",
+      "observations": "baseline ready 1m31s（終了 3m34s）。ベンチ 2 ready 21m44s: bootstrap の push 拒否が OK 表示（a11）で webapp 待ち約 4 分、early-fix 10 分。prize_target 無し。best 100710（ベンチ 7）。agent TZ=UTC で runs:wait 不発・bench:done 404 ×3、bench:done が空 run を作る、MariaDB slow log 未対応、ベンチ機 CPU 律速 198%。Bash 中央値 2.4→5.4 s（原因不明）"
+    }
+  },
+  "north_star": null,
+  "speed": {
+    "url_to_baseline_ready_min": 1.5,
+    "benches_to_prize": null,
+    "loop_median_min": 4.5,
+    "ship_median_s": 27,
+    "ship_max_s": 78,
+    "deploy_median_s": 10
+  },
+  "outcome": {
+    "score_at_60min_ratio": null,
+    "best_ratio": null,
+    "best_score": 100710,
+    "runs": 11,
+    "fails": 0,
+    "new_5xx_alerts": 1,
+    "reverts": 2,
+    "reboot_test": "not_run"
+  },
+  "agents": {
+    "1": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": 53,
+      "turn_median_s": 20,
+      "busy_min": 20.8,
+      "idle_min_before_prize": null,
+      "idle_breakdown": {
+        "human": 1.8,
+        "other_lane": 1.7,
+        "nothing": 11.3,
+        "subagent": 4.2,
+        "unmarked": 0.3
+      },
+      "merged_prs": 0,
+      "alerts_raised": 6,
+      "permission_wait_s": 0
+    },
+    "2": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": 7,
+      "turn_median_s": 93,
+      "busy_min": 10.9,
+      "idle_min_before_prize": null,
+      "idle_breakdown": {
+        "human": 1.4,
+        "other_lane": 9.4,
+        "nothing": 0.0,
+        "subagent": 2.2,
+        "unmarked": 0.0
+      },
+      "merged_prs": 7,
+      "alerts_raised": 2,
+      "permission_wait_s": 0
+    },
+    "3": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": 14,
+      "turn_median_s": 73,
+      "busy_min": 18.6,
+      "idle_min_before_prize": null,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 21.9,
+        "nothing": 3.4,
+        "subagent": 0.9,
+        "unmarked": 0.1
+      },
+      "merged_prs": 9,
+      "alerts_raised": 0,
+      "permission_wait_s": 0
+    },
+    "c": {
+      "model": "Fable 5.1",
+      "cost_usd": null,
+      "turns": 19,
+      "turn_median_s": 86,
+      "busy_min": 26.5,
+      "idle_min_before_prize": null,
+      "idle_breakdown": {
+        "human": 0.0,
+        "other_lane": 3.1,
+        "nothing": 15.5,
+        "subagent": 0.0,
+        "unmarked": 0.1
+      },
+      "merged_prs": 7,
+      "alerts_raised": 1,
+      "permission_wait_s": 0
+    }
+  },
+  "agents_total": {
+    "cost_usd": null,
+    "cost_to_prize_usd": null,
+    "merged_prs": 25,
+    "merged_unattributed": 2,
+    "merged_per_usd": null
+  },
+  "human": {
+    "todos": 48,
+    "response_median_s": {
+      "bench": 106,
+      "input": 175,
+      "otel": 104,
+      "other": 18,
+      "pick": 6,
+      "question": 17,
+      "review": 8,
+      "start": 86,
+      "url": 305
+    },
+    "total_wait_min": 24.9,
+    "wait_before_prize_min": null,
+    "decisions": {
+      "choices": 13,
+      "picks": 1,
+      "pr_reviews": 11
+    }
+  },
+  "safety": {
+    "crit_alerts": 2,
+    "review_catches": 1,
+    "dq_risks_found": null
+  },
+  "pr_lanes": {
+    "1": "3",
+    "2": "c",
+    "3": "2",
+    "4": "c",
+    "5": "?",
+    "6": "3",
+    "7": "?",
+    "8": "2",
+    "10": "2",
+    "12": "3",
+    "13": "2",
+    "15": "3",
+    "16": "3",
+    "17": "3",
+    "18": "c",
+    "20": "3",
+    "21": "c",
+    "22": "3",
+    "23": "2",
+    "24": "2",
+    "25": "c",
+    "26": "3",
+    "27": "c",
+    "28": "2",
+    "29": "c"
+  }
+}

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 当日の手順（RUNBOOK §6f GitHub Project）
+    url: https://github.com/ytakaya/isucon-kit/blob/main/docs/RUNBOOK.md#s6f
+    about: issue を Project に入れる方法（task project:add）と、Lane / Contest の付け方

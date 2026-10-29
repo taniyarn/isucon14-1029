@@ -1,0 +1,973 @@
+# Team tasks. Copy .env.example to .env and fill in hosts/keys first. Day-of order: docs/RUNBOOK.md
+#   Every HOST= takes 1|2|3 (position in HOSTS), svcN, db (the DB host) or an IP; omitted = svc1. Write HOSTS once, then never type an IP.
+#   task hosts:setup       contest start: bootstrap + agent + ops key on every host in HOSTS (svc1 = init, others = join)
+#   task deploy BRANCH=x   check out a branch on every host and run deploy.sh there
+#   task hosts:measure-off final bench: stop agent, slow log off, access log off (measure-on reverts)
+#   task ops:deploy        rsync tools/ops + tools/isumeasure to the ops host and rebuild the compose stack
+version: '3'
+
+# .env is gitignored, so a git worktree has none: also look at the main checkout (.claude/worktrees/<x> → ../../.env)
+dotenv: ['.env', '../../.env']
+
+vars:
+  SSH_OPTS: -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10
+  RSYNC: rsync -az --delete -e "ssh -i {{.SSH_KEY}} {{.SSH_OPTS}}"
+
+tasks:
+  default:
+    cmds: [task --list]
+
+  _env:
+    internal: true
+    desc: fail early when .env is missing or incomplete
+    preconditions:
+      - sh: test -f .env
+        msg: ".env is missing — cp .env.example .env and fill it in (docs/PREP.md)"
+      - sh: test -n "{{.SSH_KEY}}" && test -n "{{.OPS_HOST}}"
+        msg: "SSH_KEY / OPS_HOST are empty in .env"
+
+  # ---------- ops host ----------
+  ops:deploy:
+    desc: Deploy tools/ops + tools/isumeasure to the ops host and rebuild the compose stack (.env on the host is preserved)
+    deps: [_env]
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'sudo mkdir -p /opt/isucon-ops/src && sudo chown -R ubuntu /opt/isucon-ops'
+      - '{{.RSYNC}} --exclude .env --exclude node_modules --exclude dist --exclude out --exclude testdata tools/ops/ ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/src/ops/'
+      - '{{.RSYNC}} --exclude dist --exclude testdata tools/isumeasure/ ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/src/isumeasure/'
+      - |
+        ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && { test -f .env || { echo "!! .env missing on the ops host - create it from .env.example (BASIC_HASH via caddy hash-password)"; exit 1; }; } && docker compose up -d --build && docker compose ps'
+
+  ops:diag:
+    desc: "Health of the ops host in one screen: memory/swap, disk, container RSS + restarts, panel report failures, oom-kills"
+    deps: [_env]
+    cmds:
+      - |
+        ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} '
+          echo "== $(hostname)  $(nproc) cpu  up $(uptime -p)"; free -m | sed "s/^/   /"; df -h / /opt 2>/dev/null | sed "s/^/   /"
+          echo "== containers"; docker stats --no-stream --format "   {{"{{"}}.Name{{"}}"}}  mem {{"{{"}}.MemUsage{{"}}"}}  cpu {{"{{"}}.CPUPerc{{"}}"}}"
+          cd /opt/isucon-ops/src/ops/compose && docker compose ps --format "   {{"{{"}}.Name{{"}}"}} {{"{{"}}.Status{{"}}"}}"
+          echo "== restarts / oom"; for c in $(docker compose ps -q); do docker inspect -f "   {{"{{"}}.Name{{"}}"}} restarts={{"{{"}}.RestartCount{{"}}"}} oom={{"{{"}}.State.OOMKilled{{"}}"}}" $c; done
+          journalctl -k --since -6h 2>/dev/null | grep -ci "out of memory\|oom-kill" | sed "s/^/   kernel oom events (6h): /"
+          echo "== report failures"; ls /opt/isucon-ops/data/*/measurements/*/report-error.txt 2>/dev/null | sed "s/^/   /" || echo "   none"
+          echo "== runs on disk"; du -sh /opt/isucon-ops/data 2>/dev/null | sed "s/^/   /"'
+
+  ops:restart:
+    desc: "Recreate the panel container only (after task ops:repo on a fresh ops host, or when the panel looks stuck). isucon.env is untouched"
+    deps: [_env]
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && docker compose up -d --force-recreate panel && docker compose ps panel'
+
+  # ---------- lanes board: local blackboard of one human's four sessions (1 = hub, 2 = infra, 3 = app, c = scout) ----------
+  # Stored in <git common dir>/lanes/ (shared by every worktree, never committed). User text travels through env vars,
+  # never through the shell source, so quotes do not break. tools/lanes/lanes.py
+  lane:status:
+    desc: 'Lanes board: report this lane''s state: task lane:status LANE=1|2|3|c STATE=working|waiting-human|waiting|alert|idle STEP="<text>" [NOTE="<text>"] [AGENTS=<subagents running now>]'
+    silent: true
+    requires: { vars: [LANE, STATE, STEP] }
+    env: { L_LANE: '{{.LANE}}', L_STATE: '{{.STATE}}', L_STEP: '{{.STEP}}', L_NOTE: '{{.NOTE}}', L_AGENTS: '{{.AGENTS}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py status lane="$L_LANE" state="$L_STATE" step="$L_STEP" note="$L_NOTE" agents="$L_AGENTS"
+
+  lane:alert:
+    desc: 'Lanes board: raise an alert (prints its id; sets the lane to alert): task lane:alert LANE=1|2|3|c LEVEL=warn|crit MSG="<text>" [IMPACT="<text>"]'
+    silent: true
+    requires: { vars: [LANE, LEVEL, MSG] }
+    env: { L_LANE: '{{.LANE}}', L_LEVEL: '{{.LEVEL}}', L_MSG: '{{.MSG}}', L_IMPACT: '{{.IMPACT}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py alert lane="$L_LANE" level="$L_LEVEL" msg="$L_MSG" impact="$L_IMPACT"
+
+  lane:note:
+    desc: 'Lanes board: one line of the story (lane:web 「📜 経緯」: one card per bench — PRs on it, 律速 = the first bottleneck note after it, 効果 = [DONE] … effect, the human''s decisions, crit alerts; 「すべて表示」 = every row, filter per KIND; 「📌 いまの要点」: 6 fixed slots — 🧭 the hub''s kickoff app note (REF=docs/kickoff.md, never replaced; + the app-map note''s headline), 🧮 its BODY lines starting スコア / 減点 / 猶予 (else docs/kickoff.md), ⛔ its 禁止 lines, 🔥 the latest bottleneck note (marked old after a newer bench), 📈 score, 🙋 open decisions + the latest decision note; bench ends, run scores, decisions and alerts are added by themselves): task lane:note LANE=1|2|3|c KIND=app|bottleneck|scan|fix|decision|score|incident MSG="<headline, ≤ 120 chars>" [REF="<PR #n / ts / todo id / docs path>"] [BODY="<≤ 5 lines separated by \n, each ≤ 160 chars: only for conclusions>"]. Only at the moments the lane files name (not every step)'
+    silent: true
+    requires: { vars: [LANE, KIND, MSG] }
+    env: { L_LANE: '{{.LANE}}', L_KIND: '{{.KIND}}', L_MSG: '{{.MSG}}', L_REF: '{{.REF}}', L_BODY: '{{.BODY}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py note lane="$L_LANE" kind="$L_KIND" msg="$L_MSG" ref="$L_REF" body="$L_BODY"
+
+  lane:resolve:
+    desc: 'Lanes board: resolve an alert (the lane gets its previous state back when it was its last one): task lane:resolve ID=a3'
+    silent: true
+    requires: { vars: [ID] }
+    env: { L_ID: '{{.ID}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py resolve id="$L_ID"
+
+  lane:todo:
+    desc: 'Lanes board: ask the human to do something (prints its id): task lane:todo LANE=1|2|3|c MSG="<text>" [CMD="<the one line to paste>"] [WHY="<text>"] [AFTER="<what to do when done>"] [PR=<n> | PR="7 8 9" | CHOICES="OK|やめる|0 のまま" | PICKS="U1 <label>::<description>|U2 …" | INPUT="label1|label2" [ENVKEY=HOSTS|HOST_LOGIN|BENCH_CMD|GH_PROJECT|CONTEST]] [KIND=bench|…] [WAIT=1 [TIMEOUT=3600]]. WAIT=1 = lane:wait on the new todo in the same call (run it with run_in_background: prints the id, then the decision lines). CMD is what lane:copy / the watch keys / lane:web copy. PR = a review todo for one or several PRs (one per bench): lane:web lists each PR as a link with its title (gh pr list at creation), a toggle per PR to leave it out, 「✅ まとめて merge OK」「✋ 要修正（タブで番号）」 (lane:wait then prints ok_prs=7 9 / held_prs=8 and decision=ok|changes). KIND = the kind lane:timeline groups the human response time by (default review / question / input / other). CHOICES = a question: lane:web shows one card per choice (≤ 6, not with PR); a choice may be "label::description" (label bold, description below, the first marked 推奨); lane:wait prints decision=<the label>. PICKS = a multi-select for partial approval (≤ 12, label::description, the key is the label''s first word; not with PR / CHOICES / INPUT): lane:web shows a card + toggle per item (all ON), 「✅ 選んだものを OK」「✋ 全部やめる」; lane:wait prints picked=U1 U3, dropped=U2, decision=ok (decision=none when all dropped). INPUT = text fields (≤ 6, not with PR / CHOICES): lane:web shows one per label and 「📨 送信」; lane:wait prints input.<n>=<value> per field, then decision=done. ENVKEY (with INPUT; one field, or several joined by spaces for HOSTS) = lane:web also rewrites that line of .env; lane:wait prints env.HOSTS=<ips> / env.<KEY>=set. Only lane:web writes those decisions and answers'
+    silent: true
+    requires: { vars: [LANE, MSG] }
+    env: { L_LANE: '{{.LANE}}', L_MSG: '{{.MSG}}', L_CMD: '{{.CMD}}', L_WHY: '{{.WHY}}', L_AFTER: '{{.AFTER}}', L_PR: '{{.PR}}', L_CHOICES: '{{.CHOICES}}', L_PICKS: '{{.PICKS}}', L_INPUT: '{{.INPUT}}', L_ENVKEY: '{{.ENVKEY}}', L_KIND: '{{.KIND}}', L_WAIT: '{{.WAIT}}', L_TIMEOUT: '{{.TIMEOUT | default "3600"}}' }
+    cmds:
+      - |
+        id=$(python3 tools/lanes/lanes.py todo lane="$L_LANE" msg="$L_MSG" cmd="$L_CMD" why="$L_WHY" after="$L_AFTER" pr="$L_PR" choices="$L_CHOICES" picks="$L_PICKS" input="$L_INPUT" envkey="$L_ENVKEY" kind="$L_KIND") || exit 1
+        echo "$id"
+        case "$L_WAIT" in ""|0) ;; *) exec python3 tools/lanes/lanes.py wait id="$id" timeout="$L_TIMEOUT";; esac
+
+  lane:starts:
+    desc: 'Lanes board (hub, right after ListAgents): the start todos of lanes 2 / 3 / c, each with a CMD of one pastable line claude --model <model> "<start line with the hub''s name>" (models and start lines: tools/lanes/sessions.json; a lane whose start todo is still open is skipped): task lane:starts HUB=<name>'
+    silent: true
+    requires: { vars: [HUB] }
+    env: { L_HUB: '{{.HUB}}' }
+    cmds:
+      # LANES_OTEL=1|0 in .env adds / drops the OTel env in the start commands (default: sessions.json "otel")
+      - LANES_OTEL="{{.LANES_OTEL}}" python3 tools/lanes/lanes.py starts hub="$L_HUB"
+
+  otel:up:
+    desc: 'Optional: a local OpenTelemetry Collector (docker) for Claude Code''s own telemetry — OTLP gRPC on 127.0.0.1:4317 → <board dir>/otel/*.jsonl (lane:timeline adds tokens / cost / API latency per lane). The sessions export only when started with the OTel env (sessions.json "otel": true or LANES_OTEL=1 in .env before task lane:starts). Without docker it says so; the hooks (cc-events.jsonl) work without it'
+    silent: true
+    cmds:
+      - bash tools/lanes/otel/otel.sh up
+
+  otel:down:
+    desc: 'Stop the local OpenTelemetry Collector of otel:up (its files stay under <board dir>/otel/)'
+    silent: true
+    cmds:
+      - bash tools/lanes/otel/otel.sh down
+
+  lane:timeline:
+    desc: 'Lanes board: where the time went, as Markdown for a retro — timeline, milestones (URL → baseline → each bench → first score ≥ prize_target), each hub:ship with its steps and deploy per host, human response time per todo kind, each lane''s share of time per state, and Claude Code per lane from the hooks (turns, busy / idle, slowest tool calls, permission waits, subagents, message → pickup; tokens / cost / API latency when otel:up ran). From the board''s events.jsonl (+ run scores from the ops panel when .env has OPS_HOST): task lane:timeline [FROM=hh:mm]'
+    silent: true
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - OPS_HOST="{{.OPS_HOST}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" python3 tools/lanes/lanes.py timeline from="{{.FROM}}"
+
+  practice:record:
+    desc: 'After a practice, in the contest repo: one machine-readable record (kit practice-log/SCHEMA.md) from the board (events / hooks / OTel), the panel''s runs, docs/journal.md and docs/claims.md → <kit>/practice-log/<date>-<slug>.json (OUT or KIT_DIR = the kit checkout; neither = print it). Null where it cannot be derived: task practice:record [SLUG=isucon14] [NOTES_CHANGED="…"] [NOTES_HYPOTHESIS="…"] [NOTES_OBS="…"] [REBOOT=pass|fail|not_run] [OUT=<kit repo dir>] [BENCH_MACHINE="c5.2xlarge"]'
+    silent: true
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - >-
+        OPS_HOST="{{.OPS_HOST}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" python3 tools/lanes/practice.py record
+        slug="{{.SLUG}}" notes_changed="{{.NOTES_CHANGED}}" notes_hypothesis="{{.NOTES_HYPOTHESIS}}" notes_obs="{{.NOTES_OBS}}"
+        reboot="{{.REBOOT}}" out="{{.OUT}}" bench_machine="{{.BENCH_MACHINE}}"
+
+  practice:report:
+    desc: 'In the kit repo: one self-contained HTML (inline SVG, no external fetch) of every practice-log/*.json — URL → special prize per practice with what changed, its split and the human wait, cost vs minutes by model set, per-lane cost / idle / merged PRs, a table: task practice:report [OUT=practice-log/report.html]'
+    silent: true
+    cmds:
+      - python3 tools/lanes/practice.py report dir=practice-log out="{{.OUT | default "practice-log/report.html"}}"
+
+  lane:copy:
+    desc: 'Lanes board: copy a todo''s CMD (else its MSG) to the clipboard: task lane:copy ID=t4'
+    silent: true
+    requires: { vars: [ID] }
+    env: { L_ID: '{{.ID}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py copy id="$L_ID"
+
+  lane:items:
+    desc: 'Lanes board: the checklist of what this step does (exact progress n/m on the board instead of a guessed ETA): task lane:items ID=A3 ITEMS="indexes|livecomment|livestream|stats"'
+    silent: true
+    requires: { vars: [ID, ITEMS] }
+    env: { L_ID: '{{.ID}}', L_ITEMS: '{{.ITEMS}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py items id="$L_ID" items="$L_ITEMS"
+
+  lane:item:
+    desc: 'Lanes board: tick one checklist item of a step (1-based): task lane:item ID=A3 N=2 [STATE=done|doing|skip|todo]'
+    silent: true
+    requires: { vars: [ID, N] }
+    env: { L_ID: '{{.ID}}', L_N: '{{.N}}', L_STATE: '{{.STATE | default "done"}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py item id="$L_ID" n="$L_N" state="$L_STATE"
+
+  lane:wait:
+    desc: 'Lanes board: block until the human ticks off todo ID (✅ on lane:web, d+n on lane:watch, or task lane:done) — run it with run_in_background right after lane:todo so the tick wakes this session. Prints a last line decision=ok|changes (a PR todo decided on lane:web; before it ok_prs=<PRs to merge> and held_prs=<PRs toggled off / all with changes>), decision=<choice label> (a CHOICES todo), picked=<keys> / dropped=<keys> / decision=ok|none (a PICKS todo) or decision=done; an INPUT todo first prints input.<n>=<value> per field (env.<KEY>=… with ENVKEY; input=none when closed without answers): task lane:wait ID=t4 [TIMEOUT=3600]'
+    silent: true
+    requires: { vars: [ID] }
+    env: { L_ID: '{{.ID}}', L_TIMEOUT: '{{.TIMEOUT | default "3600"}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py wait id="$L_ID" timeout="$L_TIMEOUT"
+
+  lane:done:
+    desc: 'Lanes board: tick off a human todo: task lane:done ID=t4'
+    silent: true
+    requires: { vars: [ID] }
+    env: { L_ID: '{{.ID}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py done id="$L_ID"
+
+  lane:msg:
+    desc: 'Lanes board: send one docs/MESSAGES.md line through the board (prints its id m4). The transport to and from Codex lanes (they have no SendMessage); Claude ↔ Claude may still use SendMessage. Hub and spoke (one side is 1); the line must start with its tag: task lane:msg FROM=1 TO=3 MSG="[TASK] 3 fix TS=20261031-113002"'
+    silent: true
+    requires: { vars: [FROM, TO, MSG] }
+    env: { L_FROM: '{{.FROM}}', L_TO: '{{.TO}}', L_MSG: '{{.MSG}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py msg from="$L_FROM" to="$L_TO" msg="$L_MSG"
+
+  lane:inbox:
+    desc: 'Lanes board: print the unread board messages for LANE and mark them read (ALL=1 = the lane''s last 30 messages, sent and received, with read marks). Codex lanes run it at the start and end of every step: task lane:inbox LANE=1|2|3|c [ALL=1]'
+    silent: true
+    requires: { vars: [LANE] }
+    env: { L_LANE: '{{.LANE}}', L_ALL: '{{.ALL}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py inbox lane="$L_LANE" all="$L_ALL"
+
+  lane:wait-msg:
+    desc: 'Lanes board: block until LANE has an unread board message, then print it (marked read); exit 2 on timeout. Claude sessions run it with run_in_background (the exit wakes them; the hub always does when sessions.json has a codex lane); Codex runs it in the foreground while waiting, with a short TIMEOUT, and repeats: task lane:wait-msg LANE=1|2|3|c [TIMEOUT=3600]'
+    silent: true
+    requires: { vars: [LANE] }
+    env: { L_LANE: '{{.LANE}}', L_TIMEOUT: '{{.TIMEOUT | default "3600"}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py wait-msg lane="$L_LANE" timeout="$L_TIMEOUT"
+
+  lane:agent:
+    desc: 'Lanes board: which agent runs each lane (sessions.json "agent": claude | codex). Without LANE prints all four and, when any is codex, the transport rule: task lane:agent [LANE=1|2|3|c]'
+    silent: true
+    env: { L_LANE: '{{.LANE}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py agent lane="$L_LANE"
+
+  lane:handoff:
+    desc: 'Lanes board: write a one-page state of LANE for a successor session (Claude or Codex): board row and checklist, its open todos / alerts, unread and recent board messages, the last [TASK], open claims rows, open PRs on its branches, its worktrees (dirty / ahead), the next action from the lane file, and the start line + command for the successor: task lane:handoff LANE=1|2|3|c [OUT=docs/handoff-lane<lane>.md]'
+    silent: true
+    requires: { vars: [LANE] }
+    env: { L_LANE: '{{.LANE}}', L_OUT: '{{.OUT}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py handoff lane="$L_LANE" out="$L_OUT"
+
+  agents:md:
+    desc: 'Write AGENTS.md (what Codex CLI reads) from CLAUDE.md (+ the @imports) and tools/codex/AGENTS.codex.md (the Codex section, with the skill list from .claude/skills). CHECK=1 only compares and exits 1 when AGENTS.md is stale (run after editing CLAUDE.md, e.g. the kickoff header): task agents:md [CHECK=1]'
+    silent: true
+    cmds:
+      - python3 tools/codex/agents_md.py {{if eq (.CHECK | default "") "1"}}--check{{end}}
+
+  lane:step:
+    desc: 'Lanes board: roadmap progress of one step of tools/lanes/plan.json (doing at the start, done when the PR is out / the job is done; todo = back to automatic): task lane:step ID=I4 STATE=todo|doing|done|skip [NOTE="PR #5"]'
+    silent: true
+    requires: { vars: [ID, STATE] }
+    env: { L_ID: '{{.ID}}', L_STATE: '{{.STATE}}', L_NOTE: '{{.NOTE}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py step id="$L_ID" state="$L_STATE" note="$L_NOTE"
+
+  lane:bench:
+    desc: 'Lanes board: the bench band on lane:board (not drawn on lane:web: there the bench end is the bench todo''s 「🏁 終わった」; hub:ship sets ready, runs:wait running / collect / none, 「終わった」 collect): task lane:bench [STATE=none|ready|running|collect] [SHA=<sha>] [PRS="7 8"] [NEXT="9"] (empty keeps, "-" clears; without STATE only the fields change, e.g. task lane:bench NEXT="9"; STATE=ready never moves a running / collect band back unless SHA is new; nothing at all = print the state)'
+    silent: true
+    env: { L_STATE: '{{.STATE}}', L_SHA: '{{.SHA}}', L_PRS: '{{.PRS}}', L_NEXT: '{{.NEXT}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py bench state="$L_STATE" sha="$L_SHA" prs="$L_PRS" next="$L_NEXT" src=lane:bench
+
+  lane:phase:
+    desc: 'Lanes board: set the contest phase (baseline also marks the roadmap step H3 doing): task lane:phase PHASE=setup|baseline|loop|freeze|final'
+    silent: true
+    requires: { vars: [PHASE] }
+    env: { L_PHASE: '{{.PHASE}}' }
+    cmds:
+      - python3 tools/lanes/lanes.py phase phase="$L_PHASE"
+
+  lane:init:
+    desc: 'Lanes board: put the first human todos of the day on a new board (t1 start the hub, t2 the 3 IPs → .env HOSTS, t3 manual URLs + bench, typed into lane:web). lane:web and lane:watch run it by themselves; a no-op on a board already in use'
+    silent: true
+    cmds:
+      - python3 tools/lanes/lanes.py init
+
+  lane:board:
+    desc: 'Lanes board: print it (phase, each lane, open alerts, open human todos with ids; <= 25 lines). Read this instead of messaging other lanes'
+    silent: true
+    cmds:
+      - python3 tools/lanes/lanes.py board
+
+  lane:watch:
+    desc: 'Lanes board for the human, full screen in a spare terminal tab: lanes, your todos (1-9 copies the CMD, d then 1-9 ticks it off), alerts with who resolves them; q quits: task lane:watch [EVERY=2]'
+    silent: true
+    interactive: true
+    cmds:
+      - python3 tools/lanes/lanes.py watch {{.EVERY | default "2"}}
+
+  lane:web:
+    desc: 'Lanes board in the browser (127.0.0.1 only; opens it on macOS): copy / done / resolve buttons, 「🏁 終わった」 on the bench todo (KIND=bench, made by hub:ship; optional score + pasted bench output: closes the todo → lane:wait prints decision=done, runs task bench:done in the background; no bench band here — the ops panel shows the bench state), review todos with each PR''s link and title, a toggle per PR, 「まとめて merge OK」「要修正」, INPUT todos with text fields (an ENVKEY todo makes this process rewrite that line of ./.env), a link to the panel''s app-analysis (/app/), the 🗺 roadmap (plan.json steps, dependencies, score vs prize_target from the ops panel), 「📌 いまの要点」 (6 fixed slots: app / score formula / 禁止 / bottleneck / score / decisions) and 「📜 経緯」 (one card per bench, newest first: PRs, 律速, 効果, 決定, crit alerts; 「すべて表示」 = the lane:note lines + the human''s decisions, bench ends, run scores, alerts, filter per KIND), refreshes every 2 s: task lane:web [PORT=8765]'
+    silent: true
+    interactive: true
+    vars:
+      # same default as actions:issues: the panel as the team opens it (Caddy on the sslip.io name)
+      PANEL_URL: '{{.PANEL_URL | default (printf "https://%s.sslip.io" (replace "." "-" (.OPS_HOST | default "")))}}'
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - OPS_HOST="{{.OPS_HOST}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" GIT_REMOTE="{{.GIT_REMOTE}}" PANEL_URL="{{if .OPS_HOST}}{{.PANEL_URL}}{{end}}" LANES_OTEL="{{.LANES_OTEL}}" python3 tools/lanes/lanes.py web {{.PORT | default "8765"}}
+
+  hub:ship:
+    desc: 'Hub, after the human''s OK: merge PRS in order (a PR that will not merge is skipped with a warn alert) → sync main → task deploy → task smoke [INIT=1] → bench todo naming the PRs and sha (CMD = BENCH_CMD from .env), bench band ready, roadmap H4/H5 done. Docs-only diffs: task ops:repo only (no deploy / smoke / bench, the band untouched; they go even while a bench runs). Code ships refuse while the bench band says running (FORCE=1). Unpushed commits on main stop it; uncommitted files only when the merge changes them (journal / claims always). Run it in the background: task hub:ship PRS="5 4" [INIT=1|0] [NEXT="9"]'
+    deps: [_env]
+    env: { PRS: '{{.PRS}}', INIT: '{{.INIT | default "1"}}', NEXT: '{{.NEXT}}', FORCE: '{{.FORCE | default "0"}}' }
+    cmds:
+      - bash tools/lanes/ship.sh
+
+  index:check:
+    desc: 'Deadlock check for new indexes (IMPLEMENTATION-NOTES §5): parse the ADD INDEX / CREATE INDEX lines and scan the Go code for locking reads / UPDATE / DELETE by the indexed column in a transaction on a table that is also inserted into (replace-by-delete, FOR UPDATE + INSERT, UPDATE … SET <col>). Prints file:line and the remedies; exit 2 on risk. hub:ship runs it on every PR with index files and holds the PR unless its body has a line `index-check: reviewed`. task index:check FILE=webapp/sql/indexes/<x>.sql | BRANCH=<branch> (the index files it adds vs origin/main, code at that branch) [CODE_DIR=webapp/go]'
+    silent: true
+    cmds:
+      - |
+        {{if .BRANCH}}git fetch -q origin "+refs/heads/{{.BRANCH}}:refs/remotes/origin/{{.BRANCH}}" 2>/dev/null || true
+        git fetch -q origin +refs/heads/main:refs/remotes/origin/main 2>/dev/null || true
+        ref="refs/remotes/origin/{{.BRANCH}}"; git rev-parse -q --verify "$ref" >/dev/null || ref="{{.BRANCH}}"
+        {{end}}CODE_DIR="{{.CODE_DIR | default "webapp/go"}}" python3 tools/indexcheck/indexcheck.py {{if .BRANCH}}--ref "$ref" --base refs/remotes/origin/main{{end}} {{.FILE}}
+
+  push:
+    desc: 'Push the current branch of a worktree to origin without a permission prompt (git -C <wt> push does not match the allow rule): task push [DIR=../wt-<name>] [SET_UPSTREAM=1]. Never --force. main / a detached HEAD go to main only when the change is docs/claims.md or docs/journal.md alone (CLAUDE.md rule 4 b/c); one rebase-and-retry when main moved'
+    silent: true
+    env: { DIR: '{{.DIR}}', SET_UPSTREAM: '{{.SET_UPSTREAM}}', USER_WORKING_DIR: '{{.USER_WORKING_DIR}}' }
+    cmds:
+      - bash tools/lanes/push.sh push
+
+  pr:create:
+    desc: 'gh pr create from a worktree (branch pushed with task push first): task pr:create DIR=../wt-<name> [TITLE="…"] [BODY_FILE=<file>] [BASE=main]. Without TITLE / BODY_FILE: --fill from the commits'
+    silent: true
+    env: { DIR: '{{.DIR}}', TITLE: '{{.TITLE}}', BODY_FILE: '{{.BODY_FILE}}', BASE: '{{.BASE}}', USER_WORKING_DIR: '{{.USER_WORKING_DIR}}' }
+    cmds:
+      - bash tools/lanes/push.sh pr
+
+  pr:submit:
+    desc: 'Lanes 2 / 3 / c: hand in a worktree as a PR in one call — add -A + commit (MSG, English; only when there are uncommitted changes) + push + gh pr create, prints "PR #<n> <url>" (an open PR of the branch is reused): task pr:submit DIR=../wt-<name> TITLE="…" BODY="…" | BODY_FILE=<file> [MSG="<commit message>"] [BASE=main]. Then SendMessage [PR] to the hub (that also sets the board to waiting)'
+    silent: true
+    env: { DIR: '{{.DIR}}', TITLE: '{{.TITLE}}', BODY: '{{.BODY}}', BODY_FILE: '{{.BODY_FILE}}', MSG: '{{.MSG}}', BASE: '{{.BASE}}', USER_WORKING_DIR: '{{.USER_WORKING_DIR}}' }
+    cmds:
+      - bash tools/lanes/push.sh submit
+
+  hub:log:
+    desc: 'Hub (main checkout, on main): append one line to docs/journal.md (FILE=claims: docs/claims.md), commit only that file, push to main (pull --ff-only first; one rebase-and-retry when main moved; stops on a conflict): task hub:log LINE="hh:mm | branch / PR | 何を | なぜ | 結果" [FILE=journal|claims]'
+    silent: true
+    requires: { vars: [LINE] }
+    env: { LINE: '{{.LINE}}', FILE: '{{.FILE}}', USER_WORKING_DIR: '{{.USER_WORKING_DIR}}' }
+    cmds:
+      - bash tools/lanes/push.sh log
+
+  hub:prs:
+    desc: 'Hub: open PRs that no lane announced (a teammate''s PR: another author, or no [PR] line / claims row) get one review todo on the board, once per PR, with "claims 無し" and same-file warnings (other open PRs, open claims rows; per file, not per function). Run it at each run judgement and before each hub:ship: task hub:prs'
+    silent: true
+    cmds:
+      - python3 tools/lanes/hubprs.py
+
+  runs:
+    desc: 'Runs as the ops panel has them (score / note from the panel or bench.log, verdict, next step), newest last — the hub reads the score here instead of asking: task runs [N=8]'
+    deps: [_env]
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - OPS_HOST="{{.OPS_HOST}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" python3 tools/lanes/runs.py list {{.N | default "8"}}
+
+  runs:wait:
+    desc: 'Block until a run newer than AFTER (default: the newest scored run, so a bench already running when the wait starts still wakes it; pass AFTER=<the previous run''s ts> anyway) has a report and a score on the panel, print it with the hub''s next step (task app:refresh TS=…), exit (2 on timeout). Moves the board''s bench band meanwhile (running → collect → none). The hub runs it with run_in_background after the bench todo: task runs:wait [AFTER=<ts>] [TIMEOUT=1800]'
+    deps: [_env]
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - OPS_HOST="{{.OPS_HOST}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" python3 tools/lanes/runs.py wait after="{{.AFTER}}" timeout="{{.TIMEOUT | default "1800"}}"
+
+  run:report:
+    desc: "Rebuild the report of a collected run on ops (after editing alp.yml / pushing code): task run:report TS=<ts>. Same as the panel's re-report button"
+    deps: [_env]
+    requires: { vars: [TS] }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && docker compose exec -T panel wget -q -O- "http://127.0.0.1:8080/api/report?ts={{.TS}}"'
+
+  run:prune:
+    desc: "Delete the raw logs (slow/access logs, jsonl, pprof, export CSVs) of collected runs on ops and on every host, keeping the reports (summary/report/actions/meta/notes): task run:prune TS=<ts>[,<ts>…]. Same as the panel's ログを削除（レポートは残す） button"
+    deps: [_env]
+    requires: { vars: [TS] }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && docker compose exec -T panel wget -q -O- --post-data="" "http://127.0.0.1:8080/api/prune?ts={{.TS}}"'; echo
+
+  host:get:
+    desc: "Copy a file from a host to the laptop (read-only; for an AI session that may not scp by itself): task host:get HOST=1|2|3|<ip> PATH=/home/isucon/bench_log.txt [OUT=/tmp/]"
+    deps: [_env]
+    requires: { vars: [PATH] }
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      OUT: '{{.OUT | default "/tmp/"}}'
+    cmds:
+      - scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}}:"{{.PATH}}" {{.OUT}}
+      - 'echo "→ {{.OUT}}$(basename "{{.PATH}}")  ($(wc -l < "{{.OUT}}$(basename "{{.PATH}}")") lines)"'
+
+  ops:logs:
+    desc: 'Tail compose logs on the ops host (SERVICE=panel|tunnel|caddy). FOLLOW=0 prints the last 200 lines and exits (for Claude sessions: no timeout needed): task ops:logs [SERVICE=panel] [FOLLOW=0]'
+    deps: [_env]
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{if ne .FOLLOW "0"}}-t{{end}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && docker compose logs {{if eq .FOLLOW "0"}}--tail=200{{else}}--tail=50 -f{{end}} {{.SERVICE | default ""}}'
+
+  ops:env:
+    desc: Write /opt/isucon-ops/isucon.env on the ops host from .env (CONTEST, HOSTS) and recreate tunnel+panel (restart alone would keep the old env_file values)
+    deps: [_env]
+    cmds:
+      - |
+        i=0; lines="CONTEST={{.CONTEST}}\nSSH_USER={{.HOST_USER}}\nSSH_KEY=/opt/isucon-ops/keys/contest_ed25519"
+        for h in {{.HOSTS}}; do i=$((i+1)); lines="$lines\nSVC$i=$h"; done
+        printf "$lines\n" | ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cat > /opt/isucon-ops/isucon.env && cat /opt/isucon-ops/isucon.env && cd /opt/isucon-ops/src/ops/compose && docker compose up -d --force-recreate tunnel panel && sleep 3 && docker compose logs --tail=5 tunnel'
+
+  ops:code:
+    desc: "Sync the app source to the ops host so reports can map SQL to handlers: task ops:code CODE=/path/to/webapp/go  (lands in /opt/isucon-ops/repo/webapp/go). Only without task ops:repo: its cron resets that tree to origin/main every minute"
+    deps: [_env]
+    requires: { vars: [CODE] }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'mkdir -p /opt/isucon-ops/repo/webapp/go'
+      - '{{.RSYNC}} --exclude vendor --exclude "*.test" {{.CODE}}/ ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/repo/webapp/go/'
+
+  actions:issues:
+    desc: "Create GitHub issues from a report's next actions (no LLM involved): task actions:issues TS=20261012-053954 [REPO=owner/name] [MIN=P2] [DRY=1]. REPO defaults to the owner/name of GIT_REMOTE in .env (git@github.com:o/r.git or https://github.com/o/r). GH_PROJECT (.env, owner/number or number = REPO's owner) also adds each created issue to that GitHub Project (needs gh auth refresh -s project)"
+    deps: [_env]
+    requires: { vars: [TS] }
+    vars:
+      # owner/name from GIT_REMOTE (scp-like or URL form, .git optional) unless REPO= is given
+      REPO: '{{.REPO | default (regexReplaceAll "^(?:[a-z+]+://)?(?:[^@/]+@)?[^:/]+(?::[0-9]+)?[:/](.+?)(?:\\.git)?/?$" (.GIT_REMOTE | default "") "${1}")}}'
+      MIN: '{{.MIN | default "P2"}}'
+      DRY: '{{.DRY | default "0"}}'
+      # panel URL as the team opens it (Caddy on the sslip.io name); set PANEL_URL in .env for another domain
+      PANEL_URL: '{{.PANEL_URL | default (printf "https://%s.sslip.io" (replace "." "-" (.OPS_HOST | default "")))}}'
+    preconditions:
+      - sh: echo "{{.REPO}}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+        msg: "REPO is not owner/name ('{{.REPO}}'): set GIT_REMOTE in .env or pass REPO=owner/name"
+    cmds:
+      - |
+        tmp=$(mktemp)
+        scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/data/{{.CONTEST}}/measurements/{{.TS}}/actions.json "$tmp"
+        if [ "{{.DRY}}" = 1 ]; then echo "would create (MIN={{.MIN}}):"; jq -r '.[] | select(.priority <= "{{.MIN}}") | "  [\(.priority)] \(.title)" + (if .where != "" then "  ← " + .where else "" end)' "$tmp"; rm -f "$tmp"; exit 0; fi
+        for l in P1 P2 P3; do gh label create "$l" --repo {{.REPO}} --color "$( [ $l = P1 ] && echo d73a4a || { [ $l = P2 ] && echo fbca04 || echo c5def5; })" --force >/dev/null 2>&1 || true; done
+        gh label create "run:{{.TS}}" --repo {{.REPO}} --color ededed --force >/dev/null 2>&1 || true
+        existing=$(gh issue list --repo {{.REPO}} --state all --limit 200 --json title --jq '.[].title')
+        # GH_PROJECT: "owner/3" or "3" (owner = the repo's owner); empty = no project
+        proj="{{.GH_PROJECT}}"; proj_owner=""; proj_num=""
+        if [ -n "$proj" ]; then
+          case "$proj" in */*) proj_owner=${proj%%/*}; proj_num=${proj##*/} ;; *) proj_owner=$(echo "{{.REPO}}" | cut -d/ -f1); proj_num=$proj ;; esac
+          echo "issues also go to GitHub Project $proj_num (owner $proj_owner)"
+        fi
+        n=0
+        jq -c '.[]' "$tmp" | while read -r a; do
+          pri=$(echo "$a" | jq -r .priority); title=$(echo "$a" | jq -r .title); detail=$(echo "$a" | jq -r .detail); cmd=$(echo "$a" | jq -r .cmd); host=$(echo "$a" | jq -r .host); where=$(echo "$a" | jq -r '.where // ""')
+          [ "$pri" \> "{{.MIN}}" ] && continue
+          full="[$pri] $title"
+          if echo "$existing" | grep -Fxq "$full"; then echo "skip (exists): $full"; continue; fi
+          body="## Evidence (run {{.TS}}, $host)"$'\n'"$detail"$'\n\n'
+          [ -n "$where" ] && body="$body## Where"$'\n'"$where"$'\n\n'
+          [ -n "$cmd" ] && body="$body## Change"$'\n```sql\n'"$cmd"$'\n```\n\n'
+          body="$body## How to verify"$'\n'"Deploy on a branch (\`task deploy BRANCH=…\`), bench, collect; in the new report the row above should drop in share/avg. Note the score Δ in the panel."$'\n\n'"Report: {{.PANEL_URL}}/data/{{.CONTEST}}/measurements/{{.TS}}/report.html · Summary: {{.PANEL_URL}}/data/{{.CONTEST}}/measurements/{{.TS}}/summary.md · Panel: {{.PANEL_URL}}/"
+          url=$(gh issue create --repo {{.REPO}} --title "$full" --label "$pri" --label "run:{{.TS}}" --body "$body") || continue
+          echo "$url"; n=$((n+1))
+          if [ -n "$proj_num" ]; then
+            GH_PROJECT="$proj_owner/$proj_num" CONTEST="{{.CONTEST}}" bash {{.ROOT_DIR}}/tools/project/project.sh add "$url" "" "$pri" >/dev/null || echo "!! could not add $url to project $proj_owner/$proj_num (gh auth refresh -h github.com -s project ?)"
+          fi
+        done
+        rm -f "$tmp"
+
+  project:setup:
+    desc: "Find or create the team's GitHub Project (one for every practice and the contest; issues are told apart by the Contest field = CONTEST) and its fields; prints the GH_PROJECT line for .env. Idempotent. Needs gh auth refresh -h github.com -s project: task project:setup [OWNER=ytakaya] [TITLE=ISUCON]"
+    cmds:
+      - bash {{.ROOT_DIR}}/tools/project/project.sh setup "{{.OWNER}}" "{{.TITLE | default "ISUCON"}}"
+
+  project:add:
+    desc: "Add an issue / PR to the GitHub Project with Status=Todo, Contest=CONTEST (and Lane / Priority / Score): task project:add URL=<issue or PR url> [LANE=人|2|3|c] [PRIORITY=P1|P2|P3] [SCORE=<number>]"
+    deps: [_env]
+    requires: { vars: [URL] }
+    cmds:
+      - GH_PROJECT="{{.GH_PROJECT}}" CONTEST="{{.CONTEST}}" bash {{.ROOT_DIR}}/tools/project/project.sh add "{{.URL}}" "{{.LANE}}" "{{.PRIORITY}}" "{{.SCORE}}"
+
+  actions:plan:
+    desc: "Group a report's next actions into parallel work units (indexes / per Go file / ops) → docs/plans/<TS>.md, then hand it to Claude with the parallel-fix skill: task actions:plan TS=… [MIN=P2] [FILE=local/actions.json]"
+    deps: [_env]
+    requires: { vars: [TS] }
+    vars:
+      MIN: '{{.MIN | default "P2"}}'
+      FILE: '{{.FILE | default ""}}'
+    cmds:
+      - mkdir -p docs/plans
+      - |
+        tmp=$(mktemp)
+        if [ -n "{{.FILE}}" ]; then cp "{{.FILE}}" "$tmp"; else scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/data/{{.CONTEST}}/measurements/{{.TS}}/actions.json "$tmp"; fi
+        out=docs/plans/{{.TS}}.md
+        {
+          echo "# Plan {{.TS}} — parallel work units (MIN={{.MIN}})"
+          echo
+          echo "Source: report {{.TS}} (summary.md has the verdict). One subagent per group, one worktree each, branch fix/{{.TS}}/<slug>. indexes group: add webapp/sql/indexes/{{.TS}}-indexes.sql only. See tools/parallel-fix/SKILL.md."
+          echo
+          jq -r --arg min "{{.MIN}}" '
+            map(select(.priority <= $min))
+            | group_by(.group)
+            | sort_by(if .[0].group == "indexes" then 0 elif (.[0].group | startswith("file:")) then 1 elif (.[0].group | startswith("endpoint:")) then 2 else 3 end)
+            | .[]
+            | "## group: \(.[0].group)  → branch fix/{{.TS}}/\(.[0].slug // (.[0].group | gsub("[^A-Za-z0-9]+"; "-")))  (\(length) actions; files: \(if .[0].group == "indexes" then "webapp/sql/* (+ initialize handler if DDL must run on /initialize)" elif .[0].group == "ops" then "etc/, deploy.sh, main.go settings" else ([.[].file] | map(select(. != "")) | unique | join(", ")) end))\n"
+              + ( map(
+                    "- **[\(.priority)] \(.title)**\n  - evidence: \(.detail)\n"
+                    + (if .where != "" then "  - where: \(.where)\n" else "" end)
+                    + (if .cmd != "" then "  - change:\n    ```sql\n    \(.cmd)\n    ```\n" else "" end)
+                    + "  - verify: after deploy + bench, this row drops in share/avg in the next report\n"
+                  ) | join("") )
+          ' "$tmp"
+        } > "$out"
+        rm -f "$tmp"
+        echo "wrote $out:"; grep '^## group' "$out"
+        python3 tools/lanes/lanes.py step id=H3 state=done note="plan {{.TS}}" >/dev/null 2>&1 && echo "roadmap: H3 done" || true
+        echo
+        echo "Next: ask Claude → 「parallel-fix skill で $out を実装して」"
+
+  ops:ssh:
+    desc: ssh into the ops host
+    deps: [_env]
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}}
+
+  ops:repo:
+    desc: "Clone/sync the contest repo (GIT_REMOTE) on the ops host into /opt/isucon-ops/repo using the contest deploy key (tools/bootstrap/deploy_key — the same key the servers use, so nothing extra to register): fetch + reset --hard origin/main + clean -fd (stale files of a previous contest go; gitignored files stay), prints HEAD. The cron it installs does the same every minute. Code index for reports + commits between runs"
+    deps: [_env]
+    preconditions:
+      - sh: test -f tools/bootstrap/deploy_key
+        msg: "tools/bootstrap/deploy_key missing — ssh-keygen -t ed25519 -N '' -f tools/bootstrap/deploy_key -C contest && register deploy_key.pub (write) on the contest repo (PREP.md)"
+      - sh: test -n "{{.GIT_REMOTE}}"
+        msg: "GIT_REMOTE is empty in .env"
+    cmds:
+      - scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} tools/bootstrap/deploy_key ubuntu@{{.OPS_HOST}}:/tmp/repo_key
+      - |
+        ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} '
+          sudo install -m 600 -o ubuntu /tmp/repo_key /opt/isucon-ops/keys/repo_{{.CONTEST}}_ed25519 && rm -f /tmp/repo_key
+          export GIT_SSH_COMMAND="ssh -i /opt/isucon-ops/keys/repo_{{.CONTEST}}_ed25519 -o StrictHostKeyChecking=accept-new"
+          R=/opt/isucon-ops/repo; fresh=0
+          sudo mkdir -p $R && sudo chown -R ubuntu $R
+          if [ ! -d $R/.git ] || [ "$(git -C $R remote get-url origin 2>/dev/null)" != "{{.GIT_REMOTE}}" ]; then
+            # in place: the panel bind-mounts this directory, so it is never replaced
+            rm -rf $R/.git && git -C $R init -q && git -C $R remote add origin {{.GIT_REMOTE}}; fresh=1
+          fi
+          # a pull --ff-only failed silently on untracked files left by the previous contest: make the tree match origin/main
+          git -C $R fetch -q origin && git -C $R checkout -q -f -B main origin/main && git -C $R reset -q --hard origin/main && git -C $R clean -qfd \
+            || { echo "!! fetch/reset of $R failed (deploy key registered on {{.GIT_REMOTE}}?)"; exit 1; }
+          echo "ops repo HEAD: $(git -C $R log -1 --format="%h %s (%cr)")"
+          [ -n "$(git -C $R status --porcelain --untracked-files=normal)" ] && echo "!! $R still differs from origin/main" || echo "   tree matches origin/main"
+          [ $fresh = 1 ] && (cd /opt/isucon-ops/src/ops/compose && docker compose up -d --force-recreate panel >/dev/null 2>&1 && echo "panel recreated")
+          (crontab -l 2>/dev/null | grep -v "isucon-ops-repo-pull"; echo "* * * * * { GIT_SSH_COMMAND=\"$GIT_SSH_COMMAND\" git -C $R fetch -q origin && git -C $R reset -q --hard origin/main && git -C $R clean -qfd; } >/dev/null 2>&1; true isucon-ops-repo-pull") | crontab - \
+            && echo "cron syncs every minute (fetch + reset --hard + clean -fd: alp.yml / code changes reach the next report without task ops:repo)"'
+
+  ops:reset:
+    desc: "Delete all ops data of CONTEST (measurements, runs.json/notes, retro) and restart the panel. Destructive: task ops:reset CONFIRM=<contest name>. To switch contests you do NOT need this — change CONTEST in .env and run task ops:env"
+    deps: [_env]
+    preconditions:
+      - sh: test "{{.CONFIRM}}" = "{{.CONTEST}}"
+        msg: "refusing: run with CONFIRM={{.CONTEST}} (deletes /opt/isucon-ops/data/{{.CONTEST}} on the ops host)"
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'd=/opt/isucon-ops/data/{{.CONTEST}}; if [ -d "$d" ]; then echo "deleting $d ($(du -sh "$d" | cut -f1), $(ls "$d/measurements" 2>/dev/null | wc -l) runs)"; rm -rf "$d"; else echo "nothing at $d"; fi; mkdir -p "$d/measurements"; cd /opt/isucon-ops/src/ops/compose && docker compose restart panel >/dev/null && echo "panel restarted; data/{{.CONTEST}} is empty"'
+
+  ops:key:
+    desc: Print the ops host's public key (goes into authorized_keys of the contest hosts; task host:authorize-ops does it)
+    deps: [_env]
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cat /opt/isucon-ops/keys/contest_ed25519.pub'
+
+  # ---------- contest / practice hosts ----------
+  build:
+    desc: Cross-compile isumeasure (linux/amd64 + darwin/arm64); skipped when dist/ is newer than the sources
+    dir: tools/isumeasure
+    sources: ['*.go', 'go.mod', 'Makefile']
+    generates: ['dist/isumeasure-linux-amd64', 'dist/isumeasure-darwin-arm64']
+    cmds:
+      - make -s vet linux darwin
+
+  host:bootstrap:
+    desc: "Bootstrap one host: task host:bootstrap HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) ROLE=local|init|join [PHASE=all|prep|git] (join only: prep = no repo needed, git = fetch/reset only)"
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      ROLE: '{{.ROLE | default "local"}}'
+      PHASE: '{{.PHASE | default "all"}}'
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'rm -rf /tmp/bootstrap'
+      - '{{.RSYNC}} tools/bootstrap/ {{.HOST_LOGIN}}@{{.IP}}:/tmp/bootstrap/'
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'sudo env ROLE={{.ROLE}} PHASE={{.PHASE}} LANGS={{.LANGS}} GIT_REMOTE={{.GIT_REMOTE}} DEPLOY_KEY=/tmp/bootstrap/deploy_key bash /tmp/bootstrap/bootstrap.sh 2>&1 | tee /tmp/bootstrap{{if ne .PHASE "all"}}-{{.PHASE}}{{end}}.log | grep -E "^(NG|OK|##|--)"' | sh tools/bootstrap/colorize.sh
+
+  host:agent:
+    desc: "Build and install/upgrade the agent on one host: task host:agent HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS)"
+    deps: [_env, build]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+    cmds:
+      - scp -i {{.SSH_KEY}} {{.SSH_OPTS}} tools/isumeasure/dist/isumeasure-linux-amd64 tools/isumeasure/install-agent.sh {{.HOST_LOGIN}}@{{.IP}}:/tmp/
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'sudo env CONTEST={{.CONTEST}} TRIGGER="{{.TRIGGER}}" bash /tmp/install-agent.sh'
+
+  host:peek:
+    desc: "First look at a fresh contest host (no changes): home, env.sh (passwords masked), app/db/web units, listening ports, webapp dirs, go version. task host:peek HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) [LOGIN=isucon]"
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      LOGIN: '{{.LOGIN | default (.HOST_LOGIN | default "isucon")}}'
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.LOGIN}}@{{.IP}} 'echo "## $(hostname)  private=$(hostname -I | cut -d" " -f1)  $(grep PRETTY_NAME /etc/os-release | cut -d\" -f2)  $(nproc) cpu  $(free -m | awk "/Mem:/{print \$2}") MB"; echo "## home"; ls -la ~ | awk "NR>1{print \$9, \$5}" | grep -v "^\.$"; echo "## env.sh"; sed -E "s/(PASS[A-Z_]*=).*/\\1***/" ~/env.sh 2>/dev/null || echo "(no env.sh)"; echo "## webapp dirs"; ls ~/webapp 2>/dev/null | tr "\n" " "; echo; echo "## units (app / db / web / cache / dns)"; systemctl list-units --type=service --no-legend --plain | grep -Ei "isu|nginx|mysql|maria|postgres|redis|memcache|pdns|docker" | awk "{print \$1, \$3, \$4}"; echo "## app unit"; U=$(systemctl list-units --type=service --no-legend --plain | awk "{print \$1}" | grep -i isu | grep -v isumeasure | head -1); [ -n "$U" ] && systemctl cat "$U" 2>/dev/null | grep -E "^(WorkingDirectory|ExecStart|EnvironmentFile|Requires|After)=" ; echo "## listening"; (ss -ltnp 2>/dev/null || sudo ss -ltnp 2>/dev/null) | awk "NR>1{print \$4, \$6}" | sort -u; echo "## go"; (go version 2>/dev/null || ~/local/go/bin/go version 2>/dev/null || ~/local/golang/bin/go version 2>/dev/null || echo "(go not in PATH)")'
+
+  host:ssh:
+    desc: "ssh into a host (also: task ssh): task host:ssh HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS)"
+    aliases: [ssh]
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}}
+
+  host:status:
+    desc: "Agent status of a host: task host:status HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS)"
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'curl -s "127.0.0.1:19100/status?full=1"'
+
+  host:authorize-ops:
+    desc: "Allow the ops host to ssh into a host as HOST_USER: task host:authorize-ops HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS)"
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+    cmds:
+      - |
+        PUB=$(ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cat /opt/isucon-ops/keys/contest_ed25519.pub')
+        ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} "sudo install -d -m700 -o {{.HOST_USER}} -g {{.HOST_USER}} /home/{{.HOST_USER}}/.ssh; echo '$PUB' | sudo tee -a /home/{{.HOST_USER}}/.ssh/authorized_keys >/dev/null; sudo chown {{.HOST_USER}}:{{.HOST_USER}} /home/{{.HOST_USER}}/.ssh/authorized_keys; sudo chmod 600 /home/{{.HOST_USER}}/.ssh/authorized_keys; echo authorized"
+
+  deploy:init:
+    desc: "Draft deploy.sh from etc/systemd/system/ (captured by bootstrap): task deploy:init [APP_LANG=go] (default: first of LANGS). Review, commit, then task deploy"
+    cmds:
+      - bash tools/bootstrap/deploy-init.sh {{.APP_LANG | default ""}}
+
+  host:deploy:
+    desc: "Deploy one host: task host:deploy HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) BRANCH=main  (fetch + reset --hard origin/BRANCH, then deploy.sh as HOST_USER)"
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      BRANCH: '{{.BRANCH | default "main"}}'
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'sudo -iu {{.HOST_USER}} bash -c "cd ~ && git fetch -q origin && git checkout -q {{.BRANCH}} 2>/dev/null || git checkout -q -b {{.BRANCH}} origin/{{.BRANCH}}; git reset -q --hard origin/{{.BRANCH}} && bash deploy.sh"'
+
+  deploy:
+    desc: "Deploy BRANCH (default main) to every host in HOSTS: the hosts in DEPLOY_FIRST (space-separated list, in that order; default svc3 = 3rd of HOSTS) one by one first so app hosts find the DB already reconfigured (a failure stops there), then all the other hosts in parallel (output lines prefixed with [host]; fails if any failed). Prints the duration (also on the lanes board for task lane:timeline). Warns to run task smoke INIT=1 when the deploy changed webapp/sql/*.sql or init.sh (svc1's previous commit vs new). tools/bootstrap/deploy-all.sh"
+    deps: [_env]
+    cmds:
+      # inline, not env: — a SSH_KEY exported by the shell wins over .env in env: (dotenv never overrides)
+      - HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" DEPLOY_FIRST="{{.DEPLOY_FIRST}}" BRANCH="{{.BRANCH | default "main"}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" HOST_USER="{{.HOST_USER}}" bash tools/bootstrap/deploy-all.sh
+
+  hosts:measure-off:
+    desc: "Final bench: on every host stop the agent, remove slow-log config (DB restart), nginx access_log off. Revert with task hosts:measure-on"
+    deps: [_env]
+    cmds:
+      - for: { var: HOSTS }
+        cmd: scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} tools/bootstrap/measure-off.sh {{.HOST_LOGIN}}@{{.ITEM}}:/tmp/ && ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'sudo bash /tmp/measure-off.sh off'
+
+  hosts:measure-on:
+    desc: "Revert hosts:measure-off (slow log, access log, agent back on)"
+    deps: [_env]
+    cmds:
+      - for: { var: HOSTS }
+        cmd: scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} tools/bootstrap/measure-off.sh {{.HOST_LOGIN}}@{{.ITEM}}:/tmp/ && ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'sudo bash /tmp/measure-off.sh on'
+
+  hosts:reboot:
+    desc: "Reboot every host (final check), then wait and print unit states"
+    deps: [_env]
+    cmds:
+      - for: { var: HOSTS }
+        cmd: ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'sudo systemctl reboot' || true
+      - sleep 60
+      - for: { var: HOSTS }
+        cmd: echo "=== {{.ITEM}}" && ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'systemctl list-units --type=service --no-legend --plain | grep -Ei "isu|nginx|mysql|mariadb|postgres|redis"; systemctl list-unit-files --state=enabled --no-legend | grep -Ei "isu" ; uptime'
+
+  host:diag:
+    desc: "Read-only diagnosis of one host (units, app journal, listening ports, DNS, etc file modes): task host:diag HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) [UNIT=isupipe-go] [NAME=pipe.u.isucon.local]"
+    deps: [_env]
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      # NAME defaults to the app's hostname from analyzer.config.json (baseURL), so the dns section is never empty by accident
+      NAME: { sh: 'if [ -n "{{.NAME}}" ]; then echo "{{.NAME}}"; else python3 -c "import json,sys,urllib.parse as u; print(u.urlparse(json.load(open(\"tools/app-analyzer/analyzer.config.json\"))[\"baseURL\"]).hostname or \"\")" 2>/dev/null || true; fi' }
+    cmds:
+      - scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} tools/bootstrap/host-diag.sh {{.HOST_LOGIN}}@{{.IP}}:/tmp/host-diag.sh
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'UNIT="{{.UNIT}}" NAME="{{.NAME}}" bash /tmp/host-diag.sh'
+
+  dns:check:
+    desc: "Resolve NAME on HOST's own resolver and on 127.0.0.1:53 (PowerDNS-style contests): task dns:check HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) NAME=pipe.u.isucon.local"
+    deps: [_env]
+    requires: { vars: [NAME] }
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+    cmds:
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} 'for s in 127.0.0.1 ""; do printf "@%s %s -> " "${s:-default}" "{{.NAME}}"; dig +short +time=2 +tries=1 ${s:+@$s} "{{.NAME}}" 2>&1 | tr "\n" " "; echo; done'
+
+  db:query:
+    desc: "Read-only SQL on a host's MySQL (one SELECT/SHOW/EXPLAIN/DESCRIBE): task db:query HOST=1|2|3|db|<ip> (default: 1 = first of HOSTS) SQL=\"SELECT * FROM users WHERE name = 'x' LIMIT 3\" [DB=name]. Quotes are safe (SQL goes base64 → stdin); DB defaults to the app DB from env.sh on the host (ISUCON_DB_NAME / *_DB_NAME / *_DB_DATABASE)"
+    deps: [_env]
+    requires: { vars: [SQL] }
+    vars:
+      IP: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST}}"' }
+      SQL64: '{{.SQL | b64enc}}'
+    preconditions:
+      - sh: 'echo "{{.SQL64}}" | base64 --decode | tr "\n" " " | grep -qiE "^\s*(select|show|explain|describe|desc)\b"'
+        msg: "db:query is read-only: SQL must start with SELECT / SHOW / EXPLAIN / DESCRIBE"
+      - sh: '! echo "{{.SQL64}}" | base64 --decode | tr "\n" " " | grep -qE ";\s*[^[:space:]]"'
+        msg: "db:query runs one statement (no ; between statements)"
+    cmds:
+      - |
+        echo "{{.SQL64}}" | base64 --decode | ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.IP}} '
+          DB="{{.DB}}"
+          if [ -z "$DB" ]; then
+            DB=$(sudo cat /home/isucon/env.sh 2>/dev/null | grep -E "^(export )?[A-Z_]*DB_(NAME|DATABASE)=" | head -1 | cut -d= -f2- | tr -d "\"\047 ")
+          fi
+          echo "-- db: ${DB:-(none: qualify table names, or DB=)}" >&2
+          sudo mysql -t $DB'
+
+  wt:add:
+    desc: "New worktree for a session / subagent: task wt:add NAME=x [BRANCH=x] [BASE=origin/main] -> ../wt-<NAME> on a new branch (no upstream: push with git push -u origin <BRANCH>), plus a symlink ../wt-<NAME>/.env -> <main checkout>/.env so task works inside it (.env is gitignored: the link never blocks git worktree remove)"
+    preconditions:
+      - sh: test -n "{{.NAME}}"
+        msg: "NAME is required: task wt:add NAME=<name> [BRANCH=<branch>] [BASE=origin/main]"
+    vars:
+      BRANCH: '{{.BRANCH | default .NAME}}'
+      BASE: '{{.BASE | default "origin/main"}}'
+    cmds:
+      - git fetch -q origin
+      - git worktree add --no-track "{{.ROOT_DIR}}/../wt-{{.NAME}}" -b "{{.BRANCH}}" "{{.BASE}}"
+      - |
+        main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+        wt="{{.ROOT_DIR}}/../wt-{{.NAME}}"
+        if [ -e "$main/.env" ] || [ -L "$main/.env" ]; then ln -s "$main/.env" "$wt/.env" && echo "linked $wt/.env -> $main/.env"
+        else echo "no .env in $main: link skipped (task targets that need .env will fail in $wt)"; fi
+        echo "next: cd $(cd "$wt" && pwd)   (remove when done: git worktree remove $(cd "$wt" && pwd))"
+
+  worktrees:clean:
+    desc: "Remove leftover subagent worktrees (.claude/worktrees/* only, and only when they have no uncommitted changes) and merged fix/*, setup/*, integ/* and worktree-agent-* branches (after a parallel-fix / parallel-setup round). Worktrees elsewhere (../wt-<name> of other sessions) are listed, never removed"
+    cmds:
+      - git worktree prune
+      - |
+        main=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+        for w in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
+          [ "$w" = "$main" ] && continue
+          b=$(git -C "$w" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+          dirty=$(git -C "$w" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+          case "$w" in
+            */.claude/worktrees/*)
+              if [ "$dirty" != 0 ]; then echo "kept worktree $w ($b): $dirty uncommitted change(s) - commit or discard, then re-run"
+              else git worktree remove --force "$w" 2>/dev/null && echo "removed worktree $w ($b)" || echo "kept worktree $w ($b): locked or remove failed"; fi ;;
+            *) echo "other session's worktree (not removed): $w ($b, $([ "$dirty" = 0 ] && echo clean || echo "$dirty uncommitted"))  - its owner: git worktree remove $w" ;;
+          esac
+        done
+        git worktree prune
+        for b in $(git branch --merged main --format='%(refname:short)' | grep -E '^(fix/|setup/|integ/|worktree-agent-)'); do git branch -d "$b" >/dev/null 2>&1 && echo "deleted merged branch $b"; done
+        left=$(git branch --format='%(refname:short)' | grep -E '^(fix/|setup/|integ/|worktree-agent-)' | tr '\n' ' '); [ -z "$left" ] || echo "kept branches (unmerged, or checked out in a kept worktree): $left"
+
+  env:show:
+    desc: "Print .env with secrets masked (so an AI session can read TRIGGER/LANGS/HOSTS without touching .env)"
+    cmds:
+      - "sed -E 's/^((SSH_KEY|.*PASS.*|.*TOKEN.*|.*SECRET.*)=).*/\\1***/' .env"
+
+  smoke:
+    desc: "Replay the observed API GETs (plus login, optional initialize/dns) against a host: task smoke [HOST=1|2|<ip>] (default svc1) [INIT=1] [DNS=1]. INIT=1 also checks initialize's language = first of LANGS (another language's unit on :8080 fails). Ends with \"checked N, failed M\"; exit 1 on any failure. No analyzer.config.json yet (before kickoff phase 2): minimal probe, GET / must answer < 500 (Host = SMOKE_HOST from .env, else the IP), initialize skipped"
+    deps: [_env]
+    vars:
+      TARGET: { sh: 'HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{.HOST | default .IP}}"' }
+    dir: tools/app-analyzer
+    cmds:
+      # INIT=1 calls /api/initialize: pause run detection on every agent around it (no false run on the panel)
+      - |
+        pause() { HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" bash {{.ROOT_DIR}}/tools/bootstrap/detect-pause.sh "$1"; }
+        {{if eq .INIT "1"}}pause on; trap 'pause off' EXIT{{end}}
+        LANGS="{{.LANGS}}" SMOKE_HOST="{{.SMOKE_HOST}}" node smoke.mjs analyzer.config.json --ip {{.TARGET}} {{if eq .INIT "1"}}--initialize{{end}} {{if eq .DNS "1"}}--dns{{end}}
+
+  diffcheck:
+    desc: "Response equivalence: deploy BRANCH to svc2 (2nd of HOSTS), then compare JSON bodies of the observed GETs between svc1 (main) and svc2: task diffcheck BRANCH=fix/x [NODEPLOY=1]"
+    deps: [_env]
+    requires: { vars: [BRANCH] }
+    cmds:
+      - |
+        set -- {{.HOSTS}}; A=$1; B=${2:-}
+        [ -n "$B" ] || { echo "needs at least 2 hosts in HOSTS"; exit 1; }
+        [ "{{.NODEPLOY}}" = 1 ] || task host:deploy HOST=$B BRANCH={{.BRANCH}}
+        pause() { HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" bash {{.ROOT_DIR}}/tools/bootstrap/detect-pause.sh "$1"; }
+        pause on; trap 'pause off' EXIT
+        cd tools/app-analyzer && LANGS="{{.LANGS}}" node smoke.mjs analyzer.config.json --ip $A --compare $B --initialize
+
+  detect:pause:
+    desc: "Stop run detection on every agent of HOSTS for MIN minutes (default 2; auto-resumes) before you call /api/initialize yourself, so no false run lands on the panel: task detect:pause [MIN=2]. task smoke INIT=1, diffcheck and app:crawl do this on their own"
+    deps: [_env]
+    cmds:
+      - HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" PAUSE_MIN="{{.MIN | default 2}}" bash tools/bootstrap/detect-pause.sh on
+
+  detect:resume:
+    desc: "Resume run detection on every agent of HOSTS now (undo task detect:pause)"
+    deps: [_env]
+    cmds:
+      - HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" bash tools/bootstrap/detect-pause.sh off
+
+  app:crawl:
+    desc: "app-analysis crawl (npm run analyze) with run detection paused around it (the crawl calls /api/initialize when the config sets it). Only while the board's bench band is none: task app:crawl"
+    deps: [_env]
+    dir: tools/app-analyzer
+    cmds:
+      - |
+        pause() { HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" SSH_OPTS="{{.SSH_OPTS}}" HOST_LOGIN="{{.HOST_LOGIN}}" PAUSE_MIN=10 bash {{.ROOT_DIR}}/tools/bootstrap/detect-pause.sh "$1"; }
+        pause on; trap 'pause off' EXIT
+        npm run analyze -- analyzer.config.json
+
+  hosts:ips:
+    desc: "Print public IP → private IP (and hostname) of every host in HOSTS; the private IP goes into env.sh for the DB host"
+    deps: [_env]
+    cmds:
+      - for: { var: HOSTS }
+        cmd: printf "%s  ->  " {{.ITEM}}; ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'printf "%s  (%s)\n" "$(hostname -I | cut -d" " -f1)" "$(hostname)"'
+
+  db:snapshot:
+    desc: "Exact row counts of every table on the DB host (DB_HOST from .env/arg, default 3rd of HOSTS; the header line says which) → docs/retention/<label>.txt + latest.txt (gitignored cache the app-analysis report reads). task db:snapshot LABEL=before|after|latest [DB_HOST=ip]"
+    deps: [_env]
+    vars:
+      LABEL: '{{.LABEL | default (now | date "150405")}}'
+    cmds:
+      - |
+        H=$(HOSTS="{{.HOSTS}}" DB_HOST="{{.DB_HOST}}" bash {{.ROOT_DIR}}/tools/bootstrap/host-ip.sh "{{if .DB_HOST}}{{.DB_HOST}}{{else}}db{{end}}")
+        mkdir -p docs/retention
+        { echo "# host=$H label={{.LABEL}} time=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@$H 'for db in $(sudo mysql -Nse "SHOW DATABASES" | grep -Ev "^(information_schema|performance_schema|mysql|sys)$"); do for t in $(sudo mysql -Nse "SHOW TABLES" "$db"); do printf "%s.%s %s\n" "$db" "$t" "$(sudo mysql -Nse "SELECT COUNT(*) FROM \`$t\`" "$db")"; done; done'; } > docs/retention/{{.LABEL}}.txt
+        cp docs/retention/{{.LABEL}}.txt docs/retention/latest.txt   # the app-analysis report reads latest.txt for row counts
+        echo "docs/retention/{{.LABEL}}.txt ($(wc -l < docs/retention/{{.LABEL}}.txt) tables):"; cat docs/retention/{{.LABEL}}.txt
+        [ -f docs/retention/before.txt ] && [ "{{.LABEL}}" != before ] && { echo "--- diff vs before (rows must not go DOWN):"; diff docs/retention/before.txt docs/retention/{{.LABEL}}.txt && echo "(identical)"; } || true
+
+  retention:from-run:
+    desc: "Use a collected run's rows-end.txt (rows after the bench, counted by the agent on HOSTNAME's DB) as docs/retention/latest.txt for the app-analysis report: task retention:from-run TS=<ts> [HOSTNAME=svc3]"
+    deps: [_env]
+    requires: { vars: [TS] }
+    vars:
+      HOSTNAME: '{{.HOSTNAME | default "svc3"}}'
+    cmds:
+      - mkdir -p docs/retention
+      - scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/data/{{.CONTEST}}/measurements/{{.TS}}/{{.HOSTNAME}}/rows-end.txt docs/retention/latest.txt
+      - 'sed -i "" "1s|^# |# run={{.TS}} |" docs/retention/latest.txt 2>/dev/null || sed -i "1s|^# |# run={{.TS}} |" docs/retention/latest.txt'
+      - head -3 docs/retention/latest.txt
+
+  reboot-test:
+    desc: "Rehearse the organizers' re-test: reboot every host, wait, check units, smoke (no initialize) against svc1 — then you run the bench and compare db:snapshot. Run task hosts:measure-off and task db:snapshot LABEL=before first"
+    deps: [_env]
+    cmds:
+      - task: hosts:reboot
+      - |
+        set -- {{.HOSTS}}; A=$1
+        echo "=== waiting for ssh on every host"
+        for h in {{.HOSTS}}; do for i in $(seq 1 30); do ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} -o ConnectTimeout=3 {{.HOST_LOGIN}}@$h true 2>/dev/null && break; sleep 5; done; done
+        sleep 20
+        bad=0
+        for h in {{.HOSTS}}; do
+          echo "=== $h"
+          ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@$h 'for u in $(systemctl list-unit-files --state=enabled --no-legend | awk "{print \$1}" | grep -Ei "isu|nginx|mysql|maria|postgres|redis|pdns|memcache" | grep -v isumeasure); do st=$(systemctl is-active $u); printf "  %-40s %s\n" "$u" "$st"; [ "$st" = active ] || echo "  !! $u is $st"; done; uptime' | tee /tmp/reboot-$h.txt
+          grep -q '!!' /tmp/reboot-$h.txt && bad=1
+        done
+        echo "=== smoke against $A (no initialize: data must still be there)"
+        (cd tools/app-analyzer && node smoke.mjs analyzer.config.json --ip $A --dns) || bad=1
+        if [ $bad = 1 ]; then printf "\033[1;31m!! reboot test FAILED — fix before the real one (units not active / smoke errors)\033[0m\n"; exit 1; fi
+        printf "\033[1;32mreboot test: units active, smoke OK. Now: bench from the portal → task db:snapshot LABEL=after (rows must not drop) → bench again for the final score.\033[0m\n"
+
+  hosts:status:
+    desc: "Agent status (idle/running, last run) of every host"
+    deps: [_env]
+    cmds:
+      - for: { var: HOSTS }
+        cmd: echo "=== {{.ITEM}}" && ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.HOST_LOGIN}}@{{.ITEM}} 'curl -s 127.0.0.1:19100/status | head -c 600; echo'
+
+  hosts:setup:
+    desc: "Contest-day: bootstrap (svc1=init, others=join) + agent + ops key on every host in HOSTS, then point the ops host at them. All hosts start at once; only the others' git step waits for svc1's push. Per-host logs in /tmp/isucon-setup-<ip>.log, one timing line per host; practice (PRACTICE=1 or HOST_LOGIN=ubuntu): prints a BENCH_CMD to paste"
+    deps: [_env, build]
+    cmds:
+      - HOSTS="{{.HOSTS}}" SSH_KEY="{{.SSH_KEY}}" HOST_LOGIN="{{.HOST_LOGIN}}" HOST_USER="{{.HOST_USER}}" PRACTICE="{{.PRACTICE}}" bash tools/bootstrap/hosts-setup.sh
+
+  # ---------- deep-dive (raw data for Claude) ----------
+  run:pull:
+    desc: "Copy a collected run from the ops host to ./measurements/<TS>: task run:pull TS=20261012-053954"
+    deps: [_env]
+    requires: { vars: [TS] }
+    cmds:
+      - mkdir -p measurements/{{.TS}}
+      - rsync -az -e "ssh -i {{.SSH_KEY}} {{.SSH_OPTS}}" ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/data/{{.CONTEST}}/measurements/{{.TS}}/ measurements/{{.TS}}/
+      - 'if [ -f measurements/{{.TS}}/pruned.json ] && ! ls measurements/{{.TS}}/*/access.log.gz measurements/{{.TS}}/*/slow.log.gz >/dev/null 2>&1; then echo "!! {{.TS}}: raw logs were deleted on ops (ログ削除済み) - only the reports came down; run:export / deepdive / report need the raw logs"; fi'
+
+  bench:log:
+    desc: "Attach the bench output (practice: the file you tee'd on svc2; contest: paste in the panel instead) to a run and re-report: task bench:log TS=<ts> FILE=/tmp/bench.out"
+    deps: [_env]
+    requires: { vars: [TS, FILE] }
+    cmds:
+      - scp -q -i {{.SSH_KEY}} {{.SSH_OPTS}} {{.FILE}} ubuntu@{{.OPS_HOST}}:/tmp/bench-{{.TS}}.log
+      - ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} 'cd /opt/isucon-ops/src/ops/compose && docker compose exec -T panel sh -c "wget -q -O- --post-file=/dev/stdin \"http://127.0.0.1:8080/api/benchlog?ts={{.TS}}\"" < /tmp/bench-{{.TS}}.log; rm -f /tmp/bench-{{.TS}}.log'
+
+  run:export:
+    desc: "Export a local run to CSVs for DuckDB (same endpoint grouping as the report: ./alp.yml + CODE): task run:export TS=... [CODE=webapp/go]"
+    requires: { vars: [TS] }
+    cmds:
+      - tools/isumeasure/dist/isumeasure-darwin-arm64 export {{if .CODE}}-code {{.CODE}}{{end}} measurements/{{.TS}}
+
+  analyzer:init:
+    desc: "Build tools/app-analyzer/analyzer.config.json mechanically, then doctor: task analyzer:init [FORCE=1] [OUT=<path>] [ROOT=<repo root>] [NODOCTOR=1]. resolve = 2nd of HOSTS (svc2); domain / personas (tokens, logins) / initializeBody from the ```analyzer block of docs/kickoff.md (kickoff phase 1); codeDir / schemaPath / openapiPath / initialize / apiPrefixes / actorNames / cookie names / authCheck from webapp/; seeds from the SPA bundle (npm run routes) when svc2 answers. Never overwrites an existing config without FORCE=1"
+    dir: tools/app-analyzer
+    preconditions:
+      - sh: test -n "{{.HOSTS}}"
+        msg: "HOSTS is empty (.env): resolve needs svc2's IP"
+    vars:
+      OUT: '{{.OUT | default "analyzer.config.json"}}'
+    cmds:
+      - HOSTS="{{.HOSTS}}" node init-config.mjs --auto --out "{{.OUT}}" {{if .ROOT}}--root "{{.ROOT}}"{{end}} {{if eq .FORCE "1"}}--force{{end}}
+      - '{{if ne .NODOCTOR "1"}}node doctor.mjs "{{.OUT}}"{{else}}echo "doctor skipped (NODOCTOR=1)"{{end}}'
+
+  app:size:
+    desc: "The code's scale in <= 25 lines of Markdown, before app-analysis (no network, no DB, ~1 s): task app:size [DIR=webapp] [OUT=docs/app-size.md]. Language dir (Go first) + total lines + top 10 files, routes (chi / echo / gin / net/http) and handler funcs, tables from CREATE TABLE (cols, idx incl. PK, initial rows from INSERT tuples in *.sql / *.sql.gz), Dockerfile/compose, sqlite, URLs and exec in code"
+    vars:
+      DIR: '{{.DIR | default "webapp"}}'
+    cmds:
+      - node tools/app-analyzer/app-size.mjs "{{.DIR}}" {{if .OUT}}--out "{{.OUT}}"{{end}}
+
+  app:refresh:
+    desc: "Re-render the app-analysis report (docs/reports/latest.html + the Now block of latest.md) without a crawl (~1 s): task app:refresh [TS=<ts>|latest|none]. With TS: overlays that bench run (pulled if not local): what to solve now (bench share × score relation, issues/PRs, rules), bench flows, endpoint × table, host-bound endpoints. Without TS (or TS=none): re-reads docs/app-annotations.json + host assignments / endpoint × table from the code only, keeping the run already shown (no run needed: before the first bench, after editing annotations)"
+    vars:
+      TS: '{{.TS | default "none"}}'
+    cmds:
+      - '{{if and (ne .TS "latest") (ne .TS "none")}}test -f measurements/{{.TS}}/report.json || task run:pull TS={{.TS}}{{end}}'
+      - cd tools/app-analyzer && node refresh.mjs analyzer.config.json --run {{if or (eq .TS "latest") (eq .TS "none")}}{{.TS}}{{else}}../../measurements/{{.TS}}{{end}}
+
+  flows:
+    desc: "Sankey of what the bench's clients do (measurements/<ts>/flows.html + flows.md, from the access log; 推測): task flows TS=... [DEPTH=8] [FROM='METHOD /path'] [ROLE=cookie] [HOST=svc1]. FROM starts each client at that endpoint (the steady loop instead of the login). Opens with Mermaid from a CDN: view it on your machine"
+    requires: { vars: [TS] }
+    deps: [build]
+    cmds:
+      - tools/isumeasure/dist/isumeasure-darwin-arm64 flows -code {{.CODE | default "webapp/go"}} {{if .DEPTH}}-depth {{.DEPTH}}{{end}} {{if .FROM}}-from "{{.FROM}}"{{end}} {{if .ROLE}}-role {{.ROLE}}{{end}} {{if .HOST}}-host {{.HOST}}{{end}} measurements/{{.TS}}
+
+  groups:
+    desc: "Write alp.yml (alp-compatible endpoint groups + names) from the app's router: task groups [CODE=webapp/go]. Commit it at the repo root; report / export / the ops panel (task ops:repo) and alp --config all group the same way. Re-run when routes are added"
+    deps: [build]
+    cmds:
+      - tools/isumeasure/dist/isumeasure-darwin-arm64 groups -code {{.CODE | default "webapp/go"}} -out alp.yml
+      - 'echo "alp.yml: $(grep -c "^  - " alp.yml) groups (check the order: literal paths above the parameterized siblings), then git add alp.yml && git commit"'
+
+  retro:
+    desc: "Retrospective material for CONTEST: pull runs.json + meta/summary of every run from ops, build retro.md/html locally (REPO_DIR=<contest repo clone> adds commits between runs; ISSUES=1 adds gh issue list)"
+    deps: [_env]
+    cmds:
+      - mkdir -p measurements/{{.CONTEST}}-retro/measurements
+      - '{{.RSYNC}} --include="*/" --include="runs.json" --include="meta.json" --include="summary.md" --include="note.json" --exclude="*" ubuntu@{{.OPS_HOST}}:/opt/isucon-ops/data/{{.CONTEST}}/ measurements/{{.CONTEST}}-retro/'
+      - 'tools/isumeasure/dist/isumeasure-darwin-arm64 retro measurements/{{.CONTEST}}-retro {{if .REPO_DIR}}-repo "{{.REPO_DIR}}"{{end}}'
+      - '[ -z "{{.REPO_DIR}}" ] || git -C "{{.REPO_DIR}}" log --stat --date=iso --format="commit %h%nDate %ad%nAuthor %an%n%n    %s%n" > measurements/{{.CONTEST}}-retro/git-log.txt'
+      - '[ "{{.ISSUES}}" != "1" ] || gh issue list --state all --limit 200 --json number,title,state,createdAt,closedAt,labels > measurements/{{.CONTEST}}-retro/issues.json'
+      - 'echo "measurements/{{.CONTEST}}-retro/retro.html ready. For the write-up ask Claude: 「retrospective skill で {{.CONTEST}} の振り返りを書いて」"'
+    vars:
+      REPO_DIR: '{{.REPO_DIR | default ""}}'
+      ISSUES: '{{.ISSUES | default "0"}}'
+
+  deepdive:
+    desc: "Pull + export a run and print how to analyze it (see tools/isumeasure/deepdive/SKILL.md): task deepdive TS=..."
+    requires: { vars: [TS] }
+    cmds:
+      - task: run:pull
+        vars: { TS: '{{.TS}}' }
+      - 'if [ -f measurements/{{.TS}}/pruned.json ] && ! ls measurements/{{.TS}}/*/access.log.gz measurements/{{.TS}}/*/slow.log.gz >/dev/null 2>&1; then echo "!! {{.TS}}: raw logs deleted (ログ削除済み): deep-dive is not possible on this run - pick a run that still has its logs"; exit 1; fi'
+      - task: run:export
+        vars: { TS: '{{.TS}}' }
+      - task: flows
+        vars: { TS: '{{.TS}}' }
+      - 'command -v duckdb >/dev/null || echo "!! install duckdb - brew install duckdb"'
+      - 'echo "ready - measurements/{{.TS}} (summary.md, export/*.csv, flows.html + flows.md). Ask Claude to run the deep-dive skill on it."'
+
+  # ---------- analysis ----------
+  analyze:
+    desc: "Run the app analyzer: task analyze CONFIG=tools/app-analyzer/isuride.config.json"
+    dir: tools/app-analyzer
+    cmds:
+      - npm run -s analyze -- {{.CONFIG | default "analyzer.config.json"}}
+
+  # ---------- bench finished (lane board button / by hand) ----------
+  bench:done:
+    desc: "The bench printed its score: end the run on every host now, then collect → report → score on the ops panel in the background (returns in a few s; idempotent): task bench:done [SCORE=127667] [TS=<ts>] [OUTPUT_FILE=<saved bench output>]. Without TS: the run running now, else the newest one started in the last 10 min. OUTPUT_FILE becomes the run's bench.log (score / pass / 名前解決成功数 are read from it)"
+    deps: [_env]
+    cmds:
+      - |
+        f="{{.OUTPUT_FILE}}"
+        if [ -n "$f" ] && [ ! -s "$f" ]; then echo "!! OUTPUT_FILE=$f is missing or empty"; exit 1; fi
+        url="http://127.0.0.1:8080/api/bench-done?ts={{.TS}}&score={{.SCORE}}"
+        if [ -n "$f" ]; then post="--post-file=/dev/stdin"; in="$f"; else post="--post-data="; in=/dev/null; fi
+        if ! ssh -i {{.SSH_KEY}} {{.SSH_OPTS}} ubuntu@{{.OPS_HOST}} "cd /opt/isucon-ops/src/ops/compose && docker compose exec -T panel wget -q -O- $post \"$url\"" < "$in"; then
+          echo "!! bench-done failed. 404 = no run running and none started in the last 10 min (pass TS=<ts> from task runs); see task ops:logs FOLLOW=0 SERVICE=panel"
+          exit 1
+        fi
+        echo "collect → report → score continue on the panel; task runs (or the panel's Runs row: auto: …) shows when the report is in"

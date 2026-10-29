@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "date": "2026-10-27a",
+    "slug": "isucon13",
+    "contest_repo": "isucon13-1026",
+    "problem": "ISUCON13",
+    "prize_target": 50000,
+    "kit_commit": "238daa0",
+    "kit_head": null,
+    "models": {
+      "1": {
+        "model": "Opus 5.5",
+        "fast": false
+      },
+      "2": {
+        "model": "Opus（既定）",
+        "fast": false
+      },
+      "3": {
+        "model": "Opus（既定）",
+        "fast": false
+      },
+      "c": {
+        "model": "Opus（既定）",
+        "fast": false
+      }
+    },
+    "model_config": "1 Opus 5.5 / 2 3 c Opus（既定）",
+    "bench_machine": "c5.large（bench が 161% / 200%、頭打ちの主因と推測）",
+    "hosts": 3,
+    "url_at": "2026-10-27T00:22:00",
+    "notes": {
+      "changed": "初回の 4 セッション（盤・ship・hub）",
+      "hypothesis": "—",
+      "observations": "ベンチの前提の取り違えで 10 分、ship 停止、PR ごとの OK 約 30 回"
+    }
+  },
+  "north_star": 43.7,
+  "speed": {
+    "url_to_baseline_ready_min": 18.7,
+    "benches_to_prize": 5,
+    "loop_median_min": 3.6,
+    "ship_median_s": null,
+    "ship_max_s": null,
+    "deploy_median_s": null
+  },
+  "outcome": {
+    "score_at_60min_ratio": 2.571,
+    "best_ratio": 2.571,
+    "best_score": 128555,
+    "runs": 12,
+    "fails": 1,
+    "new_5xx_alerts": null,
+    "reverts": 1,
+    "reboot_test": "not_run"
+  },
+  "agents": {
+    "1": {
+      "model": "Opus 5.5",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 0,
+      "alerts_raised": null,
+      "permission_wait_s": null
+    },
+    "2": {
+      "model": "Opus（既定）",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 7,
+      "alerts_raised": null,
+      "permission_wait_s": null
+    },
+    "3": {
+      "model": "Opus（既定）",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 4,
+      "alerts_raised": null,
+      "permission_wait_s": null
+    },
+    "c": {
+      "model": "Opus（既定）",
+      "cost_usd": null,
+      "turns": null,
+      "turn_median_s": null,
+      "busy_min": null,
+      "idle_min_before_prize": null,
+      "idle_breakdown": null,
+      "merged_prs": 5,
+      "alerts_raised": null,
+      "permission_wait_s": null
+    }
+  },
+  "agents_total": {
+    "cost_usd": null,
+    "cost_to_prize_usd": null,
+    "merged_prs": 32,
+    "merged_unattributed": 16,
+    "merged_per_usd": null
+  },
+  "human": {
+    "todos": null,
+    "response_median_s": null,
+    "total_wait_min": null,
+    "wait_before_prize_min": null,
+    "decisions": null
+  },
+  "safety": {
+    "crit_alerts": null,
+    "review_catches": null,
+    "dq_risks_found": 1
+  },
+  "pr_lanes": {
+    "1": "?",
+    "2": "2",
+    "3": "c",
+    "4": "c",
+    "5": "c",
+    "6": "2",
+    "7": "?",
+    "8": "?",
+    "9": "?",
+    "10": "3",
+    "11": "?",
+    "12": "c",
+    "13": "3",
+    "14": "2",
+    "15": "?",
+    "16": "?",
+    "17": "?",
+    "18": "?",
+    "19": "3",
+    "20": "?",
+    "21": "?",
+    "22": "2",
+    "23": "?",
+    "24": "c",
+    "25": "3",
+    "26": "?",
+    "27": "?",
+    "28": "2",
+    "29": "?",
+    "30": "?",
+    "31": "2",
+    "32": "2"
+  }
+}

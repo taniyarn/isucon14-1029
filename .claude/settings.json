@@ -1,0 +1,163 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(task --list)",
+      "Bash(task env:show)",
+      "Bash(task hosts:ips)",
+      "Bash(task hosts:status)",
+      "Bash(task host:status:*)",
+      "Bash(task host:diag:*)",
+      "Bash(task host:peek:*)",
+      "Bash(task dns:check:*)",
+      "Bash(task db:query:*)",
+      "Bash(task run:pull:*)",
+      "Bash(task run:export:*)",
+      "Bash(task actions:plan:*)",
+      "Bash(task app:refresh:*)",
+      "Bash(task flows:*)",
+      "Bash(task deepdive:*)",
+      "Bash(task lane:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch --show-current)",
+      "Bash(git branch -a:*)",
+      "Bash(git branch --list:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git worktree list:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(gofmt -l:*)",
+      "Bash(task ops:diag)",
+      "Bash(task ops:logs FOLLOW=0:*)",
+      "Bash(task run:report:*)",
+      "Bash(task smoke:*)",
+      "Bash(task groups:*)",
+      "Bash(task bench:log:*)",
+      "Bash(task worktrees:clean:*)",
+      "Bash(task hosts:ips:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git worktree add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(date:*)",
+      "Bash(task runs)",
+      "Bash(task runs:*)",
+      "Bash(git push:*)",
+      "Bash(task push)",
+      "Bash(task push:*)",
+      "Bash(task pr:create:*)",
+      "Bash(task hub:log:*)",
+      "Bash(task pr:submit:*)",
+      "Bash(git pull --ff-only:*)",
+      "Bash(task index:check:*)",
+      "Bash(task hub:prs)",
+      "Bash(task hub:prs:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/lanes/cchook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

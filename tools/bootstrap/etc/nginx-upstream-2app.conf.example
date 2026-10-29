@@ -1,0 +1,18 @@
+# Two app servers behind the nginx on svc1 (the bench target). Put the upstream block at http level
+# (e.g. /etc/nginx/conf.d/upstream.conf) and point the site's proxy_pass at it.
+upstream app {
+    server 127.0.0.1:8080;          # svc1's own app
+    server 10.0.0.2:8080;           # svc2 private IP (same VPC; no SG change needed)
+    keepalive 64;
+}
+
+# in the server {} block of the site:
+#   location /api {
+#       proxy_http_version 1.1;
+#       proxy_set_header Connection "";
+#       proxy_set_header Host $host;
+#       proxy_pass http://app;
+#   }
+#   # endpoints with host-bound side effects (pdnsutil, local files, in-process state) stay on svc1:
+#   location = /api/register { proxy_set_header Host $host; proxy_pass http://127.0.0.1:8080; }
+#   location = /api/initialize { proxy_set_header Host $host; proxy_pass http://127.0.0.1:8080; }
